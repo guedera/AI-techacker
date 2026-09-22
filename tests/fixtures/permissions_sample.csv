@@ -1,0 +1,4 @@
+path,type,owner,group,mode,mtime
+/opt/app,directory,root,root,0755,2026-09-12T09:00:00-03:00
+/opt/app/check.py,file,root,root,0755,2026-09-12T09:01:00-03:00
+/opt/reports/report.sh,file,root,root,0777,2026-09-12T09:02:00-03:00

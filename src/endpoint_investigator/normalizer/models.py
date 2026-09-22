@@ -15,3 +15,21 @@ class Process(BaseModel):
     args: list[str] = []
     timestamp: str | None = None
     source: Literal["real", "dataset"]
+
+
+class FileResource(BaseModel):
+    path: str
+    type: Literal["file", "directory"]
+    owner: str
+    group: str
+    mode: str
+    mtime: str | None = None
+    source: Literal["real", "dataset"]
+
+
+class Service(BaseModel):
+    name: str
+    active: str
+    user: str
+    exec_start: str
+    source: Literal["real", "dataset"]

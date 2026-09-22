@@ -10,7 +10,7 @@ def _write_fake_process(
     (pid_dir / "status").write_text(
         f"Uid:\t{uid}\t{uid}\t{uid}\t{uid}\nGid:\t{uid}\t{uid}\t{uid}\t{uid}\n"
     )
-    # Campos apos o comm nao usados pelo parser sao preenchidos com zeros.
+    # campos depois do comm que o parser nao usa ficam so com zero
     (pid_dir / "stat").write_text(f"{pid} ({comm}) S {ppid} 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0\n")
     cmdline_bytes = ("\x00".join(cmdline) + "\x00").encode() if cmdline else b""
     (pid_dir / "cmdline").write_bytes(cmdline_bytes)
@@ -24,7 +24,7 @@ def test_proc_collector_reads_fake_proc(tmp_path):
     _write_fake_process(
         proc_root, pid=612, ppid=1, comm="sshd", uid=0, cmdline=["/usr/sbin/sshd", "-D"]
     )
-    (proc_root / "self").mkdir()  # entrada nao numerica deve ser ignorada
+    (proc_root / "self").mkdir()  # entrada nao numerica, tem que ser ignorada
 
     processes = ProcCollector(proc_root=proc_root).collect()
 
@@ -45,8 +45,8 @@ def test_proc_collector_reads_fake_proc(tmp_path):
 def test_proc_collector_skips_process_that_disappears(tmp_path):
     proc_root = tmp_path / "proc"
     proc_root.mkdir()
-    # Diretorio com nome de PID mas sem os arquivos internos, simulando um
-    # processo que terminou entre o iterdir() e a leitura dos detalhes.
+    # diretorio com nome de PID mas sem os arquivos de dentro, simulando um
+    # processo que morreu entre o iterdir() e a leitura dos detalhes
     (proc_root / "9999").mkdir()
 
     processes = ProcCollector(proc_root=proc_root).collect()

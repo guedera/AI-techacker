@@ -7,7 +7,7 @@ from endpoint_investigator.normalizer.models import Process
 
 
 class ProcCollector(ProcessCollector):
-    """Le processos em execucao a partir de /proc (sistema Linux real)."""
+    """Le os processos rodando no sistema real, direto do /proc."""
 
     def __init__(self, proc_root: Path = Path("/proc")) -> None:
         self._proc_root = proc_root
@@ -28,11 +28,11 @@ class ProcCollector(ProcessCollector):
             comm, state, ppid = self._parse_stat(pid_dir / "stat")
             cmdline_raw = (pid_dir / "cmdline").read_bytes()
         except (FileNotFoundError, PermissionError):
-            # processo pode ter terminado entre o iterdir() e a leitura, ou sem permissao de acesso
+            # o processo pode ter morrido entre o iterdir() e a leitura, ou a gente nao tem permissao
             return None
 
         argv = [a for a in cmdline_raw.decode(errors="replace").split("\x00") if a]
-        args = argv[1:]  # argv[0] e o executavel, nao um argumento
+        args = argv[1:]  # argv[0] e o executavel, nao conta como argumento
 
         try:
             user = pwd.getpwuid(uid).pw_name if uid is not None else "?"
@@ -69,8 +69,8 @@ class ProcCollector(ProcessCollector):
 
     @staticmethod
     def _parse_stat(stat_path: Path) -> tuple[str, str, int]:
-        # Formato de /proc/<pid>/stat: "pid (comm) state ppid ...".
-        # comm pode conter espacos/parenteses, entao delimitamos pelo ultimo ")".
+        # formato do /proc/<pid>/stat e "pid (comm) state ppid ...".
+        # comm pode ter espaco/parenteses dentro, entao cortamos pelo ultimo ")"
         raw = stat_path.read_text()
         comm_start = raw.index("(")
         comm_end = raw.rindex(")")

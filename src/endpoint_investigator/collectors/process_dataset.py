@@ -7,7 +7,7 @@ from endpoint_investigator.normalizer.models import Process
 
 
 class DatasetProcessCollector(ProcessCollector):
-    """Le um snapshot de processos a partir do processes.csv gerado por generate_dataset.py."""
+    """Le um snapshot de processos a partir do processes.csv que o generate_dataset.py cria."""
 
     def __init__(self, csv_path: Path) -> None:
         self._csv_path = csv_path
