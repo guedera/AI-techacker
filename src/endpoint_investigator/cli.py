@@ -29,7 +29,7 @@ def main() -> None:
         return
 
     for finding in findings:
-        print(f"[{finding.severity.upper()}] {finding.rule}")
+        print(f"[{finding.severity.upper()} / confianca {finding.confidence}] {finding.rule}")
         print(f"  evidencia: {finding.evidence}")
         print(f"  interpretacao: {finding.interpretation}")
         print(f"  hipotese: {finding.hypothesis}")

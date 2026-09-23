@@ -44,6 +44,32 @@ def test_regra_servico_root_com_arquivo_world_writable_dispara():
     assert len(findings) == 1
     assert findings[0].rule == "servico_privilegiado_arquivo_gravavel"
     assert findings[0].severity == "high"
+    assert findings[0].confidence == "high"
+
+
+def test_regra_servico_root_com_arquivo_gravavel_so_pelo_grupo_e_menos_grave():
+    processes = [_process(2417, 1, "root", "/bin/bash /opt/backup/backup.sh")]
+    services = [
+        Service(
+            name="backup-agent.service",
+            active="running",
+            user="root",
+            exec_start="/bin/bash /opt/backup/backup.sh",
+            source="dataset",
+        )
+    ]
+    permissions = [
+        FileResource(
+            path="/opt/backup/backup.sh", type="file", owner="root", group="backup", mode="0770", source="dataset"
+        )
+    ]
+    snapshot = Snapshot(processes=processes, permissions=permissions, services=services)
+
+    findings = find_privileged_service_writable_file(snapshot)
+
+    assert len(findings) == 1
+    assert findings[0].severity == "medium"
+    assert findings[0].confidence == "low"
 
 
 def test_regra_servico_root_com_arquivo_restrito_nao_dispara():
@@ -99,6 +125,22 @@ def test_regra_escalonamento_de_privilegio_dispara():
 
     assert len(findings) == 1
     assert findings[0].rule == "processo_root_com_pai_nao_privilegiado"
+    assert findings[0].severity == "low"  # sudo e o caminho esperado
+    assert findings[0].confidence == "high"
+
+
+def test_regra_escalonamento_sem_ferramenta_conhecida_e_mais_grave():
+    processes = [
+        _process(1212, 612, "aluno", "/bin/bash"),
+        _process(5000, 1212, "root", "/opt/estranho/binario"),
+    ]
+    snapshot = Snapshot(processes=processes, permissions=[], services=[])
+
+    findings = find_privilege_escalation_in_tree(snapshot)
+
+    assert len(findings) == 1
+    assert findings[0].severity == "high"
+    assert findings[0].confidence == "low"  # a gente nao sabe o motivo, so que e incomum
 
 
 def test_regra_escalonamento_nao_dispara_em_drop_de_privilegio_normal():
