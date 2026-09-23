@@ -1,0 +1,4 @@
+timestamp,pid,ppid,user,stat,cmd
+2026-09-14T09:00:00-03:00,1,0,root,Ss,/sbin/init
+2026-09-14T09:00:02-03:00,612,1,root,Ss,/usr/sbin/sshd -D
+2026-09-14T09:02:00-03:00,2417,1,root,Ss,/bin/bash /opt/backup/backup.sh
