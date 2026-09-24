@@ -6,6 +6,7 @@ from endpoint_investigator.collectors.process_dataset import DatasetProcessColle
 from endpoint_investigator.collectors.service_dataset import DatasetServiceCollector
 from endpoint_investigator.correlator.rules import run_all
 from endpoint_investigator.normalizer.snapshot import Snapshot
+from endpoint_investigator.reporter.console import render_findings
 
 
 def load_snapshot_from_dataset(dataset_dir: Path) -> Snapshot:
@@ -23,18 +24,7 @@ def main() -> None:
 
     snapshot = load_snapshot_from_dataset(args.dataset)
     findings = run_all(snapshot)
-
-    if not findings:
-        print("nenhum achado nessa coleta")
-        return
-
-    for finding in findings:
-        print(f"[{finding.severity.upper()} / confianca {finding.confidence}] {finding.rule}")
-        print(f"  evidencia: {finding.evidence}")
-        print(f"  interpretacao: {finding.interpretation}")
-        print(f"  hipotese: {finding.hypothesis}")
-        print(f"  evidencia ausente: {finding.missing_evidence}")
-        print()
+    render_findings(findings)
 
 
 if __name__ == "__main__":

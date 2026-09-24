@@ -31,21 +31,21 @@ Regras de ouro que guiam todas as sprints:
 
 **Objetivo:** alinhar o grupo antes de escrever código de investigação.
 
-- [ ] Definir stack (linguagem/framework) — enunciado é livre, mas priorizar algo com boas libs
+- [x] Definir stack (linguagem/framework) — enunciado é livre, mas priorizar algo com boas libs
   para parsing de `/proc`, CSV e regex (Python é natural aqui, dado o `generate_dataset.py`).
-- [ ] Desenhar a arquitetura em camadas, espelhando o fluxo de referência:
+- [x] Desenhar a arquitetura em camadas, espelhando o fluxo de referência:
   1. **Collectors** (um por fonte: processos, permissões, serviços, +opcionais)
   2. **Normalizer** (converte saída bruta de cada collector em um modelo de dados comum)
   3. **Correlator** (regras que cruzam dados normalizados de fontes diferentes)
   4. **Evidence/Hypothesis engine** (classifica achados em Evidência/Interpretação/Hipótese/Ausente)
   5. **Reporter** (gera saída legível — texto/JSON/HTML — para o analista)
-- [ ] Decidir se a ferramenta lê **sistema real** (via `/proc`, `systemctl`, `ps`) e/ou os
+- [x] Decidir se a ferramenta lê **sistema real** (via `/proc`, `systemctl`, `ps`) e/ou os
   **datasets sintéticos** (CSV/txt/log gerados pelo `generate_dataset.py`) como fonte intercambiável.
   Recomendado: abstrair a fonte de dados (real vs. dataset) por trás da mesma interface de collector,
   assim a demo pode rodar tanto na VM Kali quanto sobre datasets reproduzíveis.
-- [ ] Escolher e documentar o **escopo explícito**: quais tipos de achado a ferramenta cobre e quais
+- [x] Escolher e documentar o **escopo explícito**: quais tipos de achado a ferramenta cobre e quais
   ficam fora (necessário para a seção de limitações do documento técnico).
-- [ ] Rodar `generate_dataset.py` para os 3 níveis e inspecionar os artefatos gerados, para entender
+- [x] Rodar `generate_dataset.py` para os 3 níveis e inspecionar os artefatos gerados, para entender
   o formato exato de `processes.csv`, `permissions.csv`, `services.txt`, `journal.log`.
 
 **Entrega da sprint:** documento curto (pode ser um `ARCHITECTURE.md`) com diagrama de camadas,
@@ -57,16 +57,16 @@ escopo e decisões técnicas.
 
 **Objetivo:** implementar a camada de coleta para as 3 dimensões obrigatórias.
 
-- [ ] **Processos**: coletar PID, PPID, usuário, UID/GID, comando, argumentos, executável, estado
+- [x] **Processos**: coletar PID, PPID, usuário, UID/GID, comando, argumentos, executável, estado
   (via `/proc/<pid>/*` no sistema real, ou parsing de `processes.csv` no modo dataset).
-- [ ] **Permissões**: coletar owner, group, modo, mtime de arquivos/diretórios — mas de forma
+- [x] **Permissões**: coletar owner, group, modo, mtime de arquivos/diretórios — mas de forma
   **orientada por contexto** (arquivos referenciados por processos/serviços coletados), não varredura
   cega do filesystem.
-- [ ] **Serviços**: coletar nome, estado, usuário, grupo, comando de inicialização, executável,
+- [x] **Serviços**: coletar nome, estado, usuário, grupo, comando de inicialização, executável,
   scripts, processos associados (via `systemctl`/`service` no real, ou `services.txt` no dataset).
-- [ ] Implementar a mesma interface de collector para os dois modos (sistema real / dataset) desde
+- [x] Implementar a mesma interface de collector para os dois modos (sistema real / dataset) desde
   o início, para não precisar retrabalhar depois.
-- [ ] Testes unitários simples de parsing usando os datasets `basic` já gerados.
+- [x] Testes unitários simples de parsing usando os datasets `basic` já gerados.
 
 **Entrega da sprint:** collectors funcionando isoladamente, com output bruto por dimensão.
 
@@ -77,12 +77,12 @@ escopo e decisões técnicas.
 **Objetivo:** unificar os dados brutos das 3(+) fontes em um modelo comum que permita relacionar
 entidades por chave (PID, path, nome de serviço, usuário).
 
-- [ ] Definir modelos de dados (ex: `Process`, `FileResource`, `Service`, `LogEvent`) com campos
+- [x] Definir modelos de dados (ex: `Process`, `FileResource`, `Service`, `LogEvent`) com campos
   padronizados e IDs cruzáveis entre si (ex: `Service.pid` aponta para `Process.pid`;
   `Process.executable_path` aponta para `FileResource.path`).
-- [ ] Construir os grafos/índices de relação: processo→pai, processo→serviço, serviço→arquivo,
+- [x] Construir os grafos/índices de relação: processo→pai, processo→serviço, serviço→arquivo,
   arquivo→permissão.
-- [ ] Validar contra os 3 datasets de exemplo (`scenario_normal`, `scenario_permission`,
+- [x] Validar contra os 3 datasets de exemplo (`scenario_normal`, `scenario_permission`,
   `scenario_privileged_service` do gerador) que as relações são montadas corretamente.
 
 **Entrega da sprint:** camada de normalização testada, pronta para alimentar as regras de correlação.
@@ -94,17 +94,18 @@ entidades por chave (PID, path, nome de serviço, usuário).
 **Objetivo:** implementar **no mínimo 2 tipos de correlação** exigidos (idealmente as 4 sugeridas
 pelo enunciado, para maximizar os 2,0 pontos do critério de correlação).
 
-- [ ] Regra 1: **Processo + Serviço + Permissão → hipótese de risco**
+- [x] Regra 1: **Processo + Serviço + Permissão → hipótese de risco**
   (ex: serviço root usa script que é world-writable ou alterável por usuário não privilegiado).
-- [ ] Regra 2: **Processo + PPID + Usuário → contexto de execução**
+- [x] Regra 2: **Processo + PPID + Usuário → contexto de execução**
   (reconstruir árvore de processos e destacar mudanças de usuário/privilégio na cadeia pai→filho).
 - [ ] Regra 3 (opcional, soma pontos): **Serviço + Arquivo + Usuário → relação de privilégio**
-  (proprietário do recurso vs. usuário que o serviço usa para executar).
+  (proprietário do recurso vs. usuário que o serviço usa para executar) — ainda não implementada.
 - [ ] Regra 4 (opcional): **Processo + Serviço + Log → reconstrução temporal**
-  (cruzar timestamps de journal.log com start dos processos/serviços para contar uma linha do tempo).
-- [ ] Cada regra deve gerar um "achado candidato" com metadados: quais evidências entraram na
+  (cruzar timestamps de journal.log com start dos processos/serviços) — precisa de um collector de
+  logs que ainda não existe.
+- [x] Cada regra deve gerar um "achado candidato" com metadados: quais evidências entraram na
   correlação, não apenas um veredito binário.
-- [ ] Testar cada regra contra os cenários do gerador desenhados para acioná-la
+- [x] Testar cada regra contra os cenários do gerador desenhados para acioná-la
   (`scenario_correlation` é o mais direto para a Regra 1; `scenario_ambiguous` testa falso-positivo).
 
 **Entrega da sprint:** motor de correlação com as regras implementadas e testadas contra os datasets.
@@ -116,7 +117,7 @@ pelo enunciado, para maximizar os 2,0 pontos do critério de correlação).
 **Objetivo:** transformar achados candidatos da correlação em relatórios que respeitam a
 distinção exigida pelo enunciado.
 
-- [ ] Para cada achado, estruturar explicitamente 4 campos:
+- [x] Para cada achado, estruturar explicitamente 4 campos:
   - **Evidência**: o que foi observado (dados brutos/normalizados que sustentam o achado).
   - **Interpretação**: o significado técnico atribuído (ex: "script alterável por não-root usado
     por serviço root").
@@ -125,10 +126,12 @@ distinção exigida pelo enunciado.
   - **Evidência ausente**: o que seria necessário coletar para confirmar/rejeitar a hipótese (ex:
     "não há confirmação de que o script foi executado após alteração; logs de auditoria de escrita
     ajudariam").
-- [ ] Implementar um mecanismo de **severidade/confiança** (não binário sim/não vulnerável) — reflete
+- [x] Implementar um mecanismo de **severidade/confiança** (não binário sim/não vulnerável) — reflete
   a orientação do enunciado de evitar regras simplistas ("serviço root = vulnerável").
-- [ ] Garantir que a ferramenta **explique explicitamente casos inconclusivos** em vez de forçar uma
-  conclusão (isso é citado como qualidade esperada da ferramenta).
+- [x] Garantir que a ferramenta **explique explicitamente casos inconclusivos** em vez de forçar uma
+  conclusão (isso é citado como qualidade esperada da ferramenta) — via o campo `missing_evidence` e
+  a `confidence` baixa quando falta contexto (ex: gravável só por grupo, escalonamento sem ferramenta
+  conhecida).
 
 **Entrega da sprint:** camada de reporting estruturado (JSON interno) pronta para virar saída final.
 
@@ -139,14 +142,12 @@ distinção exigida pelo enunciado.
 **Objetivo:** apresentar o resultado da investigação de forma legível, e (se o grupo optar) usar
 LLM apenas como camada de explicação **sobre** as evidências já estruturadas.
 
-- [ ] Construir o formato de saída final (CLI colorida, Markdown, HTML ou JSON — a critério do
-  grupo) com seções: Resumo executivo → Achados por correlação → Evidência/Interpretação/Hipótese/
-  Ausente → Processos/Permissões/Serviços brutos (apêndice).
-- [ ] Se for usar LLM: alimentar o modelo com as evidências e correlações **já calculadas**
-  (nunca dados brutos "analise isso"), pedindo apenas explicação em linguagem natural ou geração de
-  hipóteses adicionais — sempre marcado como camada de interpretação, não de coleta.
-- [ ] Deixar claro no output o que veio do motor determinístico vs. o que veio da camada de IA
-  (rastreabilidade — importante para a defesa em banca).
+- [x] Construir o formato de saída final: CLI colorida via `rich` (achados com cor por severidade,
+  4 campos separados por painel). Resumo executivo e apêndice bruto (processos/permissões/serviços)
+  ficaram de fora por ora — podem entrar se sobrar tempo antes da Sprint 7.
+- [ ] Camada de IA — **decisão do grupo: adiada**, não faz parte desta entrega. Se entrar depois,
+  segue a regra do enunciado (LLM só explica achados já calculados, nunca analisa dados brutos).
+- [ ] Rastreabilidade motor determinístico vs. IA — N/A enquanto não houver camada de IA.
 
 **Entrega da sprint:** ferramenta ponta a ponta funcionando: input (real ou dataset) → relatório final.
 
