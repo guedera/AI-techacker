@@ -162,9 +162,11 @@ LLM apenas como camada de explicação **sobre** as evidências já estruturadas
 - [x] Rodar a ferramenta contra todos os cenários do gerador e confirmar comportamento esperado —
   todos batem (ver tabela em `TESTING.md`). De brinde, achamos e corrigimos 2 bugs no
   `generate_dataset.py` do professor que impediam alguns cenários de serem gerados/identificados.
-- [ ] **Ainda pendente**: usar a VM Kali pra validar `ProcCollector`/`SystemdCollector` contra um
-  Linux de verdade (hoje só testados com dados fabricados). CLI já tem suporte a modo real
-  (`uv run python -m endpoint_investigator.cli`, sem argumento de dataset) — falta só rodar lá.
+- [x] Usar a VM Kali pra validar `ProcCollector`/`SystemdCollector` contra um Linux de verdade.
+  Achou e corrigiu 2 problemas reais que os dados sintéticos não revelavam (`SystemdCollector`
+  derrubando a coleta inteira num serviço problemático; Regra 2 não reconhecendo `sudo` de
+  verdade por causa do fork). Ver `TESTING.md`. Falta só demonstrar a Regra 1 com uma situação
+  de risco criada de propósito na VM (não urgente, é a mesma lógica já validada em dataset).
 - [x] Registrar situações e limitações conhecidas — feito em `TESTING.md` (cenário `ambiguous` é
   um ponto cego por decisão de escopo, não um falso positivo).
 

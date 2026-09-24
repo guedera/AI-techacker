@@ -83,10 +83,15 @@ def find_privileged_service_writable_file(snapshot: Snapshot) -> list[Finding]:
 def find_privilege_escalation_in_tree(snapshot: Snapshot) -> list[Finding]:
     """Regra: processo root com pai rodando como usuario sem privilegio.
 
-    Se o processo usa um mecanismo de elevacao conhecido (sudo/su/pkexec), e o caminho
-    esperado: severidade baixa, confianca alta de que e legitimo. Sem um mecanismo
+    Se o processo (ou o pai dele) usa um mecanismo de elevacao conhecido (sudo/su/pkexec), e
+    o caminho esperado: severidade baixa, confianca alta de que e legitimo. Sem um mecanismo
     conhecido, a subida de privilegio e incomum: severidade alta, confianca baixa sobre
     a intencao (a gente so sabe que aconteceu, nao o motivo).
+
+    Checamos tanto o processo quanto o pai porque o sudo de verdade normalmente faz fork:
+    o processo sudo original fica com o pai (ainda como usuario comum), e quem vira root e
+    o filho, ja rodando o comando final (sem "sudo" no proprio executavel dele). Isso foi
+    descoberto rodando contra uma VM Linux de verdade, nao aparecia nos dados sinteticos.
     """
     findings: list[Finding] = []
     for process in snapshot.processes:
@@ -94,11 +99,15 @@ def find_privilege_escalation_in_tree(snapshot: Snapshot) -> list[Finding]:
         if parent is None or process.user != "root" or parent.user == "root":
             continue
 
-        if process.executable in KNOWN_ELEVATION_TOOLS:
+        elevation_tool = process.executable if process.executable in KNOWN_ELEVATION_TOOLS else None
+        if elevation_tool is None and parent.executable in KNOWN_ELEVATION_TOOLS:
+            elevation_tool = parent.executable
+
+        if elevation_tool is not None:
             severity, confidence = "low", "high"
             interpretation = (
-                f"O processo usa {process.executable}, um mecanismo padrao de elevacao de "
-                "privilegio. E o caminho esperado pra um usuario comum rodar algo como root."
+                f"O processo (ou o pai dele) usa {elevation_tool}, um mecanismo padrao de "
+                "elevacao de privilegio. E o caminho esperado pra um usuario comum rodar algo como root."
             )
         else:
             severity, confidence = "high", "low"

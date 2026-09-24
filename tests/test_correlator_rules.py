@@ -129,6 +129,22 @@ def test_regra_escalonamento_de_privilegio_dispara():
     assert findings[0].confidence == "high"
 
 
+def test_regra_escalonamento_reconhece_sudo_no_pai_via_fork():
+    # padrao real do sudo: ele faz fork, o pai fica como usuario comum e o
+    # filho ja e o comando final rodando como root (sem "sudo" no proprio executavel)
+    processes = [
+        _process(9004, 1212, "aluno", "/usr/bin/sudo /home/aluno/uv run algo"),
+        _process(9005, 9004, "root", "/home/aluno/.local/bin/uv run algo"),
+    ]
+    snapshot = Snapshot(processes=processes, permissions=[], services=[])
+
+    findings = find_privilege_escalation_in_tree(snapshot)
+
+    assert len(findings) == 1
+    assert findings[0].severity == "low"
+    assert findings[0].confidence == "high"
+
+
 def test_regra_escalonamento_sem_ferramenta_conhecida_e_mais_grave():
     processes = [
         _process(1212, 612, "aluno", "/bin/bash"),

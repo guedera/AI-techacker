@@ -54,9 +54,31 @@ dado. O resultado (nenhum achado) é o comportamento correto dado o escopo atual
 diferente de "a ferramenta investigou a conexão e concluiu que não é suspeita". Vale deixar
 isso explícito na seção de limitações.
 
-## Pendente (fora do que dá pra rodar no Mac)
+## Validação na VM Kali (sistema real)
 
-Os collectors do "sistema real" (`ProcCollector`, `SystemdCollector`) só foram validados até
-aqui contra dados fabricados nos testes automatizados (fixtures fake de `/proc`, runner
-injetado no lugar do `systemctl`) — nunca contra um Linux de verdade, porque o
-desenvolvimento é no Mac. Falta rodar na VM Kali. Ver instruções no README/conversa do grupo.
+Rodamos `sudo $(which uv) run python -m endpoint_investigator.cli` (sem argumento de dataset,
+modo sistema real) numa VM Kali de verdade. Dois problemas apareceram, **nenhum visível nos
+testes com dados sintéticos**:
+
+1. **`SystemdCollector` derrubava a coleta inteira quando um único serviço dava erro** no
+   `systemctl cat` (aconteceu com `auditd.service` na VM). Corrigido: agora esse serviço é
+   pulado e o resto da coleta continua (`service_real.py`).
+2. **Regra 2 (escalonamento de privilégio) não reconhecia `sudo` de verdade.** A ferramenta
+   pegou o próprio processo da sessão (`sudo uv run ...`) como achado — o que está certo em
+   *ter* disparado, mas com severidade `HIGH`/confiança baixa (como se fosse uma elevação sem
+   explicação), quando deveria ser `LOW`/confiança alta (sudo reconhecido). Causa: o `sudo`
+   real faz **fork** — o processo pai fica com `sudo` no executável rodando ainda como o
+   usuário comum, e quem vira root é o **filho**, já executando o comando final (sem "sudo" no
+   próprio executável dele). Nossos testes sintéticos modelavam o padrão errado (um único
+   processo com "sudo" no próprio cmd, como se fosse um exec direto). Corrigido: a regra agora
+   olha tanto o processo quanto o pai dele pra reconhecer a ferramenta de elevação
+   (`correlator/rules.py`).
+
+Isso confirma exatamente o motivo de ter essa etapa de validação: os fixtures sintéticos
+davam a impressão de estar tudo certo, mas só o sistema real revelou essas duas falhas.
+
+## Pendente
+
+Falta demonstrar a coleta completa (processos + serviços + permissões) contra uma situação
+controlada de risco de verdade na VM (ex: criar um serviço systemd de teste como root
+executando um script `chmod 777`) pra ver a Regra 1 disparar com dado real, não só sintético.
