@@ -1,3 +1,5 @@
+import subprocess
+
 from endpoint_investigator.collectors.service_real import SystemdCollector
 
 LIST_UNITS_CMD = ["systemctl", "list-units", "--type=service", "--all", "--no-legend", "--plain"]
@@ -5,7 +7,10 @@ LIST_UNITS_CMD = ["systemctl", "list-units", "--type=service", "--all", "--no-le
 
 def _fake_runner(responses: dict[tuple, str]):
     def runner(args: list[str]) -> str:
-        return responses[tuple(args)]
+        response = responses[tuple(args)]
+        if isinstance(response, Exception):
+            raise response
+        return response
 
     return runner
 
@@ -45,3 +50,23 @@ def test_systemd_collector_reads_explicit_user():
 
     assert services[0].user == "backup"
     assert services[0].exec_start == "/bin/bash /opt/backup/backup.sh"
+
+
+def test_systemd_collector_pula_unidade_que_o_systemctl_nao_consegue_detalhar():
+    # ex real: "auditd.service" aparecia no list-units mas "systemctl cat" falhava
+    responses = {
+        tuple(LIST_UNITS_CMD): (
+            "ssh.service loaded active running OpenSSH server\n"
+            "auditd.service loaded active running Security Auditing Service\n"
+        ),
+        ("systemctl", "show", "ssh.service", "-p", "ActiveState", "--value"): "active\n",
+        ("systemctl", "show", "ssh.service", "-p", "User", "--value"): "\n",
+        ("systemctl", "cat", "ssh.service"): "[Service]\nExecStart=/usr/sbin/sshd -D\n",
+        ("systemctl", "show", "auditd.service", "-p", "ActiveState", "--value"): "active\n",
+        ("systemctl", "show", "auditd.service", "-p", "User", "--value"): "\n",
+        ("systemctl", "cat", "auditd.service"): subprocess.CalledProcessError(1, ["systemctl", "cat", "auditd.service"]),
+    }
+
+    services = SystemdCollector(runner=_fake_runner(responses)).collect()
+
+    assert [s.name for s in services] == ["ssh.service"]

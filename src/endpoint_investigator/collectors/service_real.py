@@ -20,7 +20,12 @@ class SystemdCollector(ServiceCollector):
         self._runner = runner
 
     def collect(self) -> list[Service]:
-        return [self._describe(unit) for unit in self._list_units()]
+        services: list[Service] = []
+        for unit in self._list_units():
+            service = self._describe(unit)
+            if service is not None:
+                services.append(service)
+        return services
 
     def _list_units(self) -> list[str]:
         raw = self._runner(
@@ -28,10 +33,15 @@ class SystemdCollector(ServiceCollector):
         )
         return [line.split()[0] for line in raw.splitlines() if line.strip()]
 
-    def _describe(self, unit: str) -> Service:
-        active = self._runner(["systemctl", "show", unit, "-p", "ActiveState", "--value"]).strip()
-        user = self._runner(["systemctl", "show", unit, "-p", "User", "--value"]).strip()
-        unit_file = self._runner(["systemctl", "cat", unit])
+    def _describe(self, unit: str) -> Service | None:
+        try:
+            active = self._runner(["systemctl", "show", unit, "-p", "ActiveState", "--value"]).strip()
+            user = self._runner(["systemctl", "show", unit, "-p", "User", "--value"]).strip()
+            unit_file = self._runner(["systemctl", "cat", unit])
+        except subprocess.CalledProcessError:
+            # unidade apareceu no list-units mas o systemctl nao consegue detalhar ela
+            # (ex: unit "not-found"). Melhor pular do que derrubar a coleta inteira.
+            return None
         return Service(
             name=unit,
             active=active,
