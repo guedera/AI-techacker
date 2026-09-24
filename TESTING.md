@@ -72,7 +72,8 @@ testes com dados sintéticos**:
    próprio executável dele). Nossos testes sintéticos modelavam o padrão errado (um único
    processo com "sudo" no próprio cmd, como se fosse um exec direto). Corrigido: a regra agora
    olha tanto o processo quanto o pai dele pra reconhecer a ferramenta de elevação
-   (`correlator/rules.py`).
+   (`correlator/rules.py`). **Confirmado na VM**: depois do fix, o mesmo achado (a própria
+   sessão `sudo uv run ...`) passou a aparecer como `LOW`/confiança `high`.
 
 Isso confirma exatamente o motivo de ter essa etapa de validação: os fixtures sintéticos
 davam a impressão de estar tudo certo, mas só o sistema real revelou essas duas falhas.
