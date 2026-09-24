@@ -157,19 +157,16 @@ LLM apenas como camada de explicação **sobre** as evidências já estruturadas
 
 **Objetivo:** validar a ferramenta contra cenários variados, incluindo os mais ambíguos.
 
-- [ ] Gerar datasets nos 3 níveis (`basic`, `intermediate`, `challenge`) incluindo `--batch` para
-  múltiplos cenários e `--seed` para reprodutibilidade.
-- [ ] Rodar a ferramenta contra todos os cenários do gerador (`scenario_normal`, `scenario_permission`,
-  `scenario_privileged_service`, `scenario_correlation`, `scenario_ambiguous`, `random_noise`) e
-  confirmar que:
-  - cenários normais não geram falso-positivo de alta severidade;
-  - `scenario_correlation` (script world-writable + serviço root) é capturado;
-  - `scenario_ambiguous` (conexão externa de serviço root) não é classificado como malware sem
-    contexto adicional — deve aparecer como hipótese fraca / evidência insuficiente.
-- [ ] Opcional: usar a VM Kali para criar 1–2 situações controladas reais (não apenas dataset) e
-  validar a coleta no sistema de verdade — reforça a nota de "domínio técnico" na demo.
-- [ ] Registrar quais situações geram falsos positivos conhecidos — vai direto para a seção de
-  limitações do documento técnico.
+- [x] Gerar datasets nos 3 níveis (`basic`, `intermediate`, `challenge`) incluindo `--batch` para
+  múltiplos cenários e `--seed` para reprodutibilidade. Ver `TESTING.md`.
+- [x] Rodar a ferramenta contra todos os cenários do gerador e confirmar comportamento esperado —
+  todos batem (ver tabela em `TESTING.md`). De brinde, achamos e corrigimos 2 bugs no
+  `generate_dataset.py` do professor que impediam alguns cenários de serem gerados/identificados.
+- [ ] **Ainda pendente**: usar a VM Kali pra validar `ProcCollector`/`SystemdCollector` contra um
+  Linux de verdade (hoje só testados com dados fabricados). CLI já tem suporte a modo real
+  (`uv run python -m endpoint_investigator.cli`, sem argumento de dataset) — falta só rodar lá.
+- [x] Registrar situações e limitações conhecidas — feito em `TESTING.md` (cenário `ambiguous` é
+  um ponto cego por decisão de escopo, não um falso positivo).
 
 **Entrega da sprint:** bateria de testes documentada, com resultado esperado vs. obtido por cenário.
 

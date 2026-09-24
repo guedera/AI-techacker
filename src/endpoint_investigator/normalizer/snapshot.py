@@ -7,6 +7,18 @@ from endpoint_investigator.normalizer.models import FileResource, Process, Servi
 INTERPRETERS = {"/bin/bash", "/bin/sh", "/usr/bin/python3", "/usr/bin/python"}
 
 
+def resource_paths(process: Process) -> list[str]:
+    """Executavel do processo, mais o script que ele roda quando o executavel e um interpretador.
+
+    Fica fora da classe Snapshot de proposito: pra montar um snapshot do sistema real a gente
+    precisa saber quais paths pedir pro collector de permissao antes de ter as permissoes ainda.
+    """
+    paths = [process.executable] if process.executable else []
+    if process.executable in INTERPRETERS:
+        paths.extend(a for a in process.args if a.startswith("/"))
+    return paths
+
+
 @dataclass
 class Snapshot:
     """Junta processos, permissoes e servicos de uma coleta e da uns lookups prontos entre eles."""
@@ -34,11 +46,7 @@ class Snapshot:
         return self._permission_by_path.get(path)
 
     def paths_of_interest(self, process: Process) -> list[str]:
-        """Executavel do processo, mais o script que ele roda quando o executavel e um interpretador."""
-        paths = [process.executable] if process.executable else []
-        if process.executable in INTERPRETERS:
-            paths.extend(a for a in process.args if a.startswith("/"))
-        return paths
+        return resource_paths(process)
 
     def process_for_service(self, service: Service) -> Process | None:
         for process in self.processes:

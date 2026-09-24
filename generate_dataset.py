@@ -110,6 +110,7 @@ def scenario_permission(start: datetime) -> dict:
         "estabelece que ele seja executado por um serviço privilegiado. O aluno "
         "deve diferenciar configuração inadequada de evidência de exploração."
     )
+    d["kind"] = "permission"  # scenario_normal ja preenche kind="normal", tem que sobrescrever
     return d
 
 
@@ -224,25 +225,49 @@ def scenario_ambiguous(start: datetime) -> dict:
 
 def random_noise(start: datetime, seed: int) -> dict:
     """Gera um cenário intermediário aleatório a partir de padrões conhecidos."""
+    # nota: scenario_normal ja devolve processes/permissions no formato final
+    # (dict), entao a gente completa esse mesmo dict em vez de mandar tudo de
+    # novo pro build() (que so aceita as tuplas cruas de entrada).
     random.seed(seed)
     base = scenario_normal(start)
-    processes = list(base["processes"])
-    permissions = list(base["permissions"])
-    services = list(base["services"])
-    logs = list(base["logs"])
 
-    # Ajustes aleatórios de PID e uma situação de interesse.
     pid = random.randint(2000, 6000)
     service_name = random.choice(["backup-agent", "report-sync", "inventory-agent"])
     script = f"/opt/{service_name}/run.sh"
     owner = "root"
     mode = random.choice(["0750", "0700", "0770", "0777"])
-    processes.append((pid, 1, "root", "Ss", f"/bin/bash {script}"))
-    permissions.append((f"/opt/{service_name}", "directory", "root", "root", "0755"))
-    permissions.append((script, "file", owner, "root", mode))
-    services.append((f"{service_name}.service", "running", "root", f"/bin/bash {script}"))
-    logs.append((random.randint(100, 300), f"systemd[1]: Started {service_name}.service - {service_name} service."))
-    return build(start, processes, permissions, services, logs, "random")
+
+    base["processes"].append({
+        "timestamp": iso(start + timedelta(seconds=len(base["processes"]) * 2)),
+        "pid": str(pid),
+        "ppid": "1",
+        "user": "root",
+        "stat": "Ss",
+        "cmd": f"/bin/bash {script}",
+    })
+    base["permissions"].append({
+        "path": f"/opt/{service_name}",
+        "type": "directory",
+        "owner": "root",
+        "group": "root",
+        "mode": "0755",
+        "mtime": iso(start - timedelta(days=1)),
+    })
+    base["permissions"].append({
+        "path": script,
+        "type": "file",
+        "owner": owner,
+        "group": "root",
+        "mode": mode,
+        "mtime": iso(start - timedelta(days=1)),
+    })
+    base["services"].append((f"{service_name}.service", "running", "root", f"/bin/bash {script}"))
+    base["logs"].append(
+        (start + timedelta(seconds=random.randint(100, 300)),
+         f"systemd[1]: Started {service_name}.service - {service_name} service.")
+    )
+    base["kind"] = "random"
+    return base
 
 
 def build(start, processes, permissions, services, logs, kind):
