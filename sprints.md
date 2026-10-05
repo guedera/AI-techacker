@@ -178,12 +178,12 @@ LLM apenas como camada de explicação **sobre** as evidências já estruturadas
 
 **Objetivo:** produzir os entregáveis escritos exigidos.
 
-- [ ] **README.md**: arquitetura, dependências, instalação, execução, fontes de informação usadas,
+- [x] **README.md**: arquitetura, dependências, instalação, execução, fontes de informação usadas,
   correlações implementadas, limitações conhecidas.
-- [ ] **Documento técnico (máx. 4 páginas)**: problema, estratégia de investigação, arquitetura,
-  principais correlações, decisões técnicas, uso de IA (se aplicável), limitações. Manter dentro do
-  limite de páginas — ser direto.
-- [ ] Revisar se a seção de limitações é honesta: onde a ferramenta pode gerar falso positivo,
+- [x] **Documento técnico (máx. 4 páginas)**: `relatorio_final.md` (converter para PDF e conferir
+  o limite de 4 páginas): problema, estratégia de investigação, arquitetura, principais
+  correlações, decisões técnicas, uso de IA, limitações.
+- [x] Revisar se a seção de limitações é honesta: onde a ferramenta pode gerar falso positivo,
   interpretação incompleta ou resultado inconclusivo (isso é valorizado, não penalizado).
 
 **Entrega da sprint:** README.md e documento técnico finalizados.
