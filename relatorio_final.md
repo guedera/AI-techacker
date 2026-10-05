@@ -136,10 +136,9 @@ serviço root com script restrito (`0700`) não dispara a C1.
 
 ## 7. Uso de IA
 
-Usamos ferramentas de IA generativa como apoio ao desenvolvimento, como o enunciado permite:
-planejamento das etapas, escrita de código e testes, depuração (incluindo a análise dos bugs do
-gerador e das falhas na VM) e redação da documentação. A dupla definiu o escopo, tomou as decisões
-de arquitetura e revisou e commitou o código.
+Usamos ferramentas de IA generativa como apoio ao desenvolvimento:
+Correção de código e dos casos de testes, depuração (incluindo a análise dos bugs do
+gerador e das falhas que ocorreram na VM) e redação da documentação.
 
 **A solução em si não usa nenhum modelo de linguagem.** Coleta, normalização, correlação e geração
 dos textos dos achados são determinísticas. Decidimos não incluir uma camada de IA nesta versão. Se

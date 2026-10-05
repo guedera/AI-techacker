@@ -1,10 +1,20 @@
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from endpoint_investigator.normalizer.models import FileResource, Process, Service
 
 # quando o executavel de um processo e um desses, o arquivo que interessa de
 # verdade pra analise de permissao esta nos argumentos, nao no executavel
-INTERPRETERS = {"/bin/bash", "/bin/sh", "/usr/bin/python3", "/usr/bin/python"}
+INTERPRETER_NAMES = {"bash", "sh", "dash", "zsh"}
+
+
+def _is_interpreter(executable: str | None) -> bool:
+    # compara so o nome: no Linux real o /proc/<pid>/exe resolve pra /usr/bin/bash
+    # (ou /usr/bin/dash, /usr/bin/python3.13...), nao pro /bin/bash que aparece no cmd
+    if not executable:
+        return False
+    name = Path(executable).name
+    return name in INTERPRETER_NAMES or name.startswith("python")
 
 
 def resource_paths(process: Process) -> list[str]:
@@ -14,7 +24,7 @@ def resource_paths(process: Process) -> list[str]:
     precisa saber quais paths pedir pro collector de permissao antes de ter as permissoes ainda.
     """
     paths = [process.executable] if process.executable else []
-    if process.executable in INTERPRETERS:
+    if _is_interpreter(process.executable):
         paths.extend(a for a in process.args if a.startswith("/"))
     return paths
 

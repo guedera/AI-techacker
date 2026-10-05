@@ -3,7 +3,8 @@ from pathlib import Path
 from endpoint_investigator.collectors.permission_dataset import DatasetPermissionCollector
 from endpoint_investigator.collectors.process_dataset import DatasetProcessCollector
 from endpoint_investigator.collectors.service_dataset import DatasetServiceCollector
-from endpoint_investigator.normalizer.snapshot import Snapshot
+from endpoint_investigator.normalizer.models import Process
+from endpoint_investigator.normalizer.snapshot import Snapshot, resource_paths
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -66,3 +67,35 @@ def test_files_of_service_e_permission_lookup():
 
     assert "/opt/backup/backup.sh" in files
     assert script_permission.mode == "0777"
+
+
+def test_resource_paths_reconhece_interpretador_pelo_nome():
+    # no Linux real o /proc/<pid>/exe resolve pra /usr/bin/bash, nao /bin/bash
+    for executable in ("/usr/bin/bash", "/usr/bin/dash", "/usr/bin/python3.13"):
+        process = Process(
+            pid=10,
+            ppid=1,
+            user="root",
+            state="S",
+            cmd=f"{executable} /opt/demo/backup.sh",
+            executable=executable,
+            args=["/opt/demo/backup.sh"],
+            source="real",
+        )
+
+        assert resource_paths(process) == [executable, "/opt/demo/backup.sh"]
+
+
+def test_resource_paths_nao_segue_argumento_de_binario_comum():
+    process = Process(
+        pid=11,
+        ppid=1,
+        user="root",
+        state="S",
+        cmd="/usr/bin/curl /tmp/algo",
+        executable="/usr/bin/curl",
+        args=["/tmp/algo"],
+        source="real",
+    )
+
+    assert resource_paths(process) == ["/usr/bin/curl"]

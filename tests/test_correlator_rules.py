@@ -199,3 +199,33 @@ def test_run_all_junta_as_duas_regras():
         "servico_privilegiado_arquivo_gravavel",
         "processo_root_com_pai_nao_privilegiado",
     }
+
+
+def test_regra_servico_root_dispara_com_exe_resolvido_pra_usr_bin():
+    # na Kali real o cmd diz /bin/bash, mas o /proc/<pid>/exe resolve pra /usr/bin/bash
+    process = Process(
+        pid=2417,
+        ppid=1,
+        user="root",
+        state="S",
+        cmd="/bin/bash /opt/demo/backup.sh",
+        executable="/usr/bin/bash",
+        args=["/opt/demo/backup.sh"],
+        source="real",
+    )
+    service = Service(
+        name="demo-backup.service",
+        active="active",
+        user="root",
+        exec_start="/bin/bash /opt/demo/backup.sh",
+        source="real",
+    )
+    permission = FileResource(
+        path="/opt/demo/backup.sh", type="file", owner="root", group="root", mode="0777", source="real"
+    )
+    snapshot = Snapshot(processes=[process], permissions=[permission], services=[service])
+
+    findings = find_privileged_service_writable_file(snapshot)
+
+    assert len(findings) == 1
+    assert findings[0].severity == "high"

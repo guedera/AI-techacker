@@ -27,7 +27,7 @@ COLETA → NORMALIZAÇÃO → CORRELAÇÃO → EVIDÊNCIAS/HIPÓTESES → RESULT
 | Evidências/hipóteses | `evidence/` | Modelo `Finding`: evidência, interpretação, hipótese, evidência ausente, severidade e confiança |
 | Resultado | `reporter/` | Relatório no terminal (`rich`), um painel por achado, colorido por severidade |
 
-Mais detalhes de arquitetura e decisões em [ARCHITECTURE.md](ARCHITECTURE.md).
+Mais detalhes de arquitetura e decisões em [ARCHITECTURE.md](organization/ARCHITECTURE.md).
 
 ## Requisitos
 
@@ -197,7 +197,7 @@ Resumo; a lista completa está no [relatorio_final.md](relatorio_final.md).
 ## Sobre o `generate_dataset.py`
 
 O enunciado permite adaptar o script fornecido. Corrigimos dois bugs nele (detalhes em
-[TESTING.md](TESTING.md)):
+[TESTING.md](organization/TESTING.md)):
 
 1. O cenário `random_noise` quebrava sempre que era sorteado (`intermediate` e `challenge`).
 2. O cenário `scenario_permission` aparecia rotulado como `normal` no `metadata.json`.
@@ -205,6 +205,6 @@ O enunciado permite adaptar o script fornecido. Corrigimos dois bugs nele (detal
 ## Mais documentação
 
 - [relatorio_final.md](relatorio_final.md): documento técnico (problema, estratégia, arquitetura, correlações, decisões, uso de IA, limitações).
-- [ARCHITECTURE.md](ARCHITECTURE.md): camadas, escopo e decisões de arquitetura.
-- [TESTING.md](TESTING.md): validação contra os cenários do gerador e na VM Kali.
-- [sprints.md](sprints.md): plano de execução e o que foi feito.
+- [ARCHITECTURE.md](organization/ARCHITECTURE.md): camadas, escopo e decisões de arquitetura.
+- [TESTING.md](organization/TESTING.md): validação contra os cenários do gerador e na VM Kali.
+- [sprints.md](organization/sprints.md): plano de execução e o que foi feito.
