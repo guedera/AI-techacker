@@ -165,8 +165,9 @@ LLM apenas como camada de explicação **sobre** as evidências já estruturadas
 - [x] Usar a VM Kali pra validar `ProcCollector`/`SystemdCollector` contra um Linux de verdade.
   Achou e corrigiu 2 problemas reais que os dados sintéticos não revelavam (`SystemdCollector`
   derrubando a coleta inteira num serviço problemático; Regra 2 não reconhecendo `sudo` de
-  verdade por causa do fork). Ver `TESTING.md`. Falta só demonstrar a Regra 1 com uma situação
-  de risco criada de propósito na VM (não urgente, é a mesma lógica já validada em dataset).
+  verdade por causa do fork). A Regra 1 também foi validada com dado real, num serviço de teste
+  criado de propósito na VM, o que revelou e corrigiu um terceiro problema (interpretadores
+  comparados pelo caminho exato). Ver `TESTING.md`.
 - [x] Registrar situações e limitações conhecidas — feito em `TESTING.md` (cenário `ambiguous` é
   um ponto cego por decisão de escopo, não um falso positivo).
 

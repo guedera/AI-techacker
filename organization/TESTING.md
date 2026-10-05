@@ -78,8 +78,18 @@ testes com dados sintéticos**:
 Isso confirma exatamente o motivo de ter essa etapa de validação: os fixtures sintéticos
 davam a impressão de estar tudo certo, mas só o sistema real revelou essas duas falhas.
 
-## Pendente
+### Regra 1 com dado real (situação controlada na VM)
 
-Falta demonstrar a coleta completa (processos + serviços + permissões) contra uma situação
-controlada de risco de verdade na VM (ex: criar um serviço systemd de teste como root
-executando um script `chmod 777`) pra ver a Regra 1 disparar com dado real, não só sintético.
+Para ver a Regra 1 disparar fora de dataset, criamos na VM um serviço systemd de teste
+(`demo-backup.service`, roda como root e executa `/bin/bash /opt/demo/backup.sh`, um script com
+permissão `0777`). Ao montar esse teste identificamos um terceiro problema do modo real:
+
+3. **Interpretadores comparados pelo caminho exato.** A lista tinha `/bin/bash`, mas no Linux real
+   o `/proc/<pid>/exe` resolve para o caminho canônico (`/usr/bin/bash`; o `sh` do Debian vira
+   `/usr/bin/dash` e o Python vira `/usr/bin/python3.13`), então o script nos argumentos não era
+   reconhecido e a Regra 1 não disparava. Corrigido: a comparação agora é pelo **nome** do
+   executável (`normalizer/snapshot.py`), com testes cobrindo esses casos.
+
+**Confirmado na VM:** a execução em sistema real passou a mostrar `HIGH`/confiança `high` para
+`demo-backup.service` (permissão `0777`, dono root:root), além do `LOW`/`high` da própria sessão
+`sudo`, sem nenhum outro achado. É o fluxo completo (processo + serviço + permissão) com dado real.

@@ -24,7 +24,7 @@ src/endpoint_investigator/
   cli.py         # ponto de entrada
 ```
 
-- `tests/`: 29 testes unitários por camada.
+- `tests/`: 32 testes unitários por camada.
 - `training/`: datasets sintéticos gerados localmente (ignorado pelo git; reprodutíveis via `--seed`).
 
 ## Fonte de dados intercambiável

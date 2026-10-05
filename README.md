@@ -89,7 +89,7 @@ o `sudo` usa um `PATH` próprio e não encontra o `uv` instalado na home do usu�
 uv run pytest -q
 ```
 
-São 29 testes e eles rodam sem Linux: o `/proc` e o `systemctl` são injetáveis nos collectors reais,
+São 32 testes e eles rodam sem Linux: o `/proc` e o `systemctl` são injetáveis nos collectors reais,
 então o parsing é testado com dados fabricados.
 
 ## Fontes de informação
@@ -171,7 +171,7 @@ src/endpoint_investigator/
   correlator/rules.py     # regras de correlação
   evidence/models.py      # Finding
   reporter/console.py     # saída no terminal
-tests/                    # 29 testes automatizados
+tests/                    # 32 testes automatizados
 generate_dataset.py       # gerador de datasets (fornecido, com duas correções)
 training/                 # datasets gerados localmente (ignorado pelo git)
 ```

@@ -113,7 +113,7 @@ serviço root com script restrito (`0700`) não dispara a C1.
   coleta; interpretação, hipótese e evidência ausente são textos fixos por regra, com poucas
   variáveis. Mesma entrada, mesma saída: é auditável e não depende de LLM.
 - **Testabilidade sem Linux.** O desenvolvimento foi em macOS, então o `/proc` e o `systemctl` são
-  injetáveis nos collectors reais, e o parsing é testado com dados fabricados (29 testes).
+  injetáveis nos collectors reais, e o parsing é testado com dados fabricados (32 testes).
 - **Resiliência.** Processos que somem durante a leitura do `/proc` e units que o `systemctl` não
   detalha são ignorados, sem derrubar a coleta.
 
@@ -133,6 +133,12 @@ serviço root com script restrito (`0700`) não dispara a C1.
   comando final como root, então a C2 classificava a própria sessão da ferramenta como elevação
   desconhecida. Corrigimos os dois (a regra passou a olhar processo e pai) e, na nova execução, o
   `sudo` foi classificado corretamente (severidade baixa, confiança alta).
+
+Para ver a C1 com dado real, criamos na VM um serviço de teste (`demo-backup.service`, root,
+executando um script `0777`). A ferramenta o apontou como achado alta/alta, como mostra o trecho da
+execução real abaixo:
+
+![Execução da ferramenta na VM Kali: achado da C1 sobre o serviço de teste](organization/image.png)
 
 ## 7. Uso de IA
 
