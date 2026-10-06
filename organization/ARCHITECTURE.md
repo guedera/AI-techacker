@@ -24,20 +24,20 @@ src/endpoint_investigator/
   cli.py         # ponto de entrada
 ```
 
-- `tests/`: 32 testes unitários por camada.
+- `tests/`: 47 testes unitários por camada.
 - `training/`: datasets sintéticos gerados localmente (ignorado pelo git; reprodutíveis via `--seed`).
 
 ## Fonte de dados intercambiável
 
 Cada dimensão tem uma interface (`ProcessCollector.collect()`, `PermissionCollector.collect(paths)`,
-`ServiceCollector.collect()`) com duas implementações, que já devolvem os modelos comuns:
+`ServiceCollector.collect()`, `LogCollector.collect()`) com duas implementações, que já devolvem os modelos comuns:
 
-- **Real**: `/proc/<pid>/{status,stat,cmdline,exe}`, `os.stat()` e `systemctl list-units/show/cat`.
-- **Dataset**: `processes.csv`, `permissions.csv` e `services.txt` do `generate_dataset.py`.
+- **Real**: `/proc/<pid>/{status,stat,cmdline,exe}`, `os.stat()`, `systemctl list-units/show/cat` e `journalctl`.
+- **Dataset**: `processes.csv`, `permissions.csv`, `services.txt` e `journal.log` do `generate_dataset.py`.
 
 A mesma investigação roda na VM Kali e sobre datasets reprodutíveis
 (`basic`/`intermediate`/`challenge`). A fonte real tem pontos de injeção (`proc_root` no
-`ProcCollector`, `runner` no `SystemdCollector`) para testar o parsing sem Linux.
+`ProcCollector`, `runner` no `SystemdCollector` e no `JournalCollector`) para testar o parsing sem Linux.
 
 ## Escopo (v1)
 
@@ -47,9 +47,12 @@ A mesma investigação roda na VM Kali e sobre datasets reprodutíveis
   (executável e, quando o executável é um interpretador, o script nos argumentos). O collector real
   levanta `ValueError` se chamado sem a lista de caminhos.
 - Serviços: nome, estado, usuário e `ExecStart`.
+- Logs: horário, programa, PID e mensagem (journal do boot atual). Servem de reforço: se o
+  `journalctl` não existir ou falhar, a coleta segue sem eles.
 
 **Fora do escopo (decisão consciente, entra como limitação no documento técnico)**
-- Logs/journal, conexões de rede, usuários e grupos, hashes de arquivos, persistência.
+- Conexões de rede, usuários e grupos, hashes de arquivos, persistência e auditoria de escrita
+  (`auditd`): por isso os logs mostram quando o serviço rodou, mas não quem editou o arquivo.
 
 ## Correlações
 
@@ -60,8 +63,9 @@ Implementadas (mínimo exigido: 2):
 2. **Processo + PPID + Usuário → contexto de execução** (`processo_root_com_pai_nao_privilegiado`):
    processo root cujo pai roda como usuário comum.
 
-Não implementadas: Serviço + Arquivo + Usuário (relação de privilégio) e Processo + Serviço + Log
-(reconstrução temporal, exigiria um collector de logs).
+Os logs entram como reforço de evidência dentro dessas duas regras: na 1, cruzam o `mtime` do arquivo
+com os logs do serviço (linha do tempo); na 2, anexam os logs do processo e do pai (ex.: registro do
+`sudo`). Não implementada: Serviço + Arquivo + Usuário (relação de privilégio).
 
 ## Regra de saída
 

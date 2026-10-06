@@ -99,3 +99,31 @@ def test_resource_paths_nao_segue_argumento_de_binario_comum():
     )
 
     assert resource_paths(process) == ["/usr/bin/curl"]
+
+
+def test_events_of_service_liga_logs_pelo_nome_da_unit_e_pelo_pid():
+    from endpoint_investigator.collectors.log_dataset import DatasetLogCollector
+
+    snapshot = _load_snapshot()
+    snapshot.logs = DatasetLogCollector(FIXTURES / "journal_sample.log").collect()
+    backup_service = next(s for s in snapshot.services if s.name == "backup-agent.service")
+
+    events = snapshot.events_of_service(backup_service)
+
+    # "Starting backup-agent.service" (pelo nome da unit) e as 2 linhas de backup-agent[2417]
+    assert [e.message for e in events] == [
+        "Starting backup-agent.service - Internal Backup Agent...",
+        "backup job started",
+        "backup completed with status=OK",
+    ]
+    assert events == sorted(events, key=lambda e: e.timestamp)
+
+
+def test_events_of_pid_so_devolve_logs_daquele_pid():
+    from endpoint_investigator.collectors.log_dataset import DatasetLogCollector
+
+    snapshot = _load_snapshot()
+    snapshot.logs = DatasetLogCollector(FIXTURES / "journal_sample.log").collect()
+
+    assert len(snapshot.events_of_pid(2417)) == 2
+    assert snapshot.events_of_pid(9999) == []

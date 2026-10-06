@@ -44,14 +44,14 @@ COLETA → NORMALIZAÇÃO → CORRELAÇÃO → EVIDÊNCIAS/HIPÓTESES → RESULT
 collectors/  normalizer/   correlator/   evidence/            reporter/
 ```
 
-- **Coleta.** Um collector por dimensão (processos, permissões, serviços), cada um com duas
+- **Coleta.** Um collector por dimensão (processos, permissões, serviços e logs), cada um com duas
   implementações atrás da mesma interface: *real* (lê `/proc/<pid>/{status,stat,cmdline,exe}`,
-  `os.stat()` e `systemctl`) e *dataset* (lê `processes.csv`, `permissions.csv` e `services.txt` do
+  `os.stat()`, `systemctl` e `journalctl`) e *dataset* (lê `processes.csv`, `permissions.csv`, `services.txt` e `journal.log` do
   gerador fornecido). A mesma investigação roda, portanto, na VM Kali e sobre datasets reproduzíveis.
-- **Normalização.** Os collectors produzem modelos comuns (`Process`, `FileResource`, `Service`,
+- **Normalização.** Os collectors produzem modelos comuns (`Process`, `FileResource`, `Service`, `LogEvent`,
   validados com pydantic). A classe `Snapshot` empacota uma coleta e constrói as relações: processo
-  ↔ pai e filhos, serviço ↔ processo (pela linha de comando), serviço ↔ arquivos usados e arquivo ↔
-  permissão.
+  ↔ pai e filhos, serviço ↔ processo (pela linha de comando), serviço ↔ arquivos usados, arquivo ↔
+  permissão e serviço/processo ↔ logs.
 - **Correlação.** Funções de regra recebem o `Snapshot` e devolvem achados.
 - **Evidências e hipóteses.** O modelo `Finding` carrega os quatro campos exigidos, mais severidade e
   confiança.
@@ -75,6 +75,9 @@ que ele usa e a permissão de cada um.
 | Gravável só pelo grupo dono | média | baixa (não sabemos quem está no grupo) |
 | Restrito ao dono | sem achado | — |
 
+Os logs do serviço entram na evidência: a ferramenta cruza a data de modificação do arquivo com o
+último registro do serviço e informa se ele teve atividade depois da alteração.
+
 **C2 — Processo + PPID + Usuário → contexto de execução** (`processo_root_com_pai_nao_privilegiado`).
 Aponta processos root cujo pai roda como usuário comum.
 
@@ -84,18 +87,20 @@ Aponta processos root cujo pai roda como usuário comum.
 | Sem mecanismo de elevação conhecido | alta | baixa (sabemos que aconteceu, não o motivo) |
 
 A queda normal de privilégio (`sshd` root abrindo o shell de um usuário) não dispara a C2, e um
-serviço root com script restrito (`0700`) não dispara a C1.
+serviço root com script restrito (`0700`) não dispara a C1. Na C2, os logs do processo e do pai
+(como o registro do `sudo`) são anexados à evidência.
 
 **Exemplo de achado (C1, saída da ferramenta resumida):**
 
 - **Evidência:** o serviço `backup-agent.service` roda como root e executa `/opt/backup/backup.sh`,
-  que tem permissão `0777` (dono root:root).
+  que tem permissão `0777` (dono root:root). Os logs mostram 4 registros do serviço, o último em
+  14/09 09:02, depois da última modificação do arquivo (13/09 08:59).
 - **Interpretação:** o arquivo usado pelo serviço privilegiado pode ser alterado por qualquer
   usuário do sistema.
 - **Hipótese:** se algum usuário alterar o arquivo, o conteúdo passa a rodar como root na próxima
   execução do serviço.
-- **Evidência ausente:** nada confirma que o arquivo foi alterado, nem que o serviço executou logo
-  depois de uma alteração suspeita. Auditoria de escrita (`auditd`) ou histórico de hash ajudariam.
+- **Evidência ausente:** os logs não mostram quem alterou o arquivo nem o que mudou. Auditoria de
+  escrita (`auditd`) ou histórico de hash ajudariam.
 
 ## 5. Decisões técnicas
 
@@ -112,8 +117,8 @@ serviço root com script restrito (`0700`) não dispara a C1.
 - **Textos dos achados por templates determinísticos.** A evidência é montada com os dados da
   coleta; interpretação, hipótese e evidência ausente são textos fixos por regra, com poucas
   variáveis. Mesma entrada, mesma saída: é auditável e não depende de LLM.
-- **Testabilidade sem Linux.** O desenvolvimento foi em macOS, então o `/proc` e o `systemctl` são
-  injetáveis nos collectors reais, e o parsing é testado com dados fabricados (32 testes).
+- **Testabilidade sem Linux.** O desenvolvimento foi em macOS, então o `/proc`, o `systemctl` e o `journalctl` são
+  injetáveis nos collectors reais, e o parsing é testado com dados fabricados (47 testes).
 - **Resiliência.** Processos que somem durante a leitura do `/proc` e units que o `systemctl` não
   detalha são ignorados, sem derrubar a coleta.
 
@@ -138,25 +143,16 @@ Para ver a C1 com dado real, criamos na VM um serviço de teste (`demo-backup.se
 executando um script `0777`). A ferramenta o apontou como achado alta/alta, como mostra o trecho da
 execução real abaixo:
 
-![Execução da ferramenta na VM Kali: achado da C1 sobre o serviço de teste](organization/image.png)
+![Execução da ferramenta na VM Kali: achado da C1 sobre o serviço de teste](organization/print_kali_regra1.png)
 
-## 7. Uso de IA
+## 7. Limitações
 
-Usamos ferramentas de IA generativa como apoio ao desenvolvimento:
-Correção de código e dos casos de testes, depuração (incluindo a análise dos bugs do
-gerador e das falhas que ocorreram na VM) e redação da documentação.
-
-**A solução em si não usa nenhum modelo de linguagem.** Coleta, normalização, correlação e geração
-dos textos dos achados são determinísticas. Decidimos não incluir uma camada de IA nesta versão. Se
-for incluída no futuro, só poderá entrar depois da correlação, explicando achados já estruturados,
-nunca recebendo dados brutos para "analisar a máquina".
-
-## 8. Limitações
-
-- **Escopo.** Só processos, permissões e serviços: sem conexões de rede, logs, hashes,
-  usuários/grupos ou persistência, e apenas duas das quatro correlações sugeridas. No cenário
+- **Escopo.** Processos, permissões, serviços e logs: sem conexões de rede, hashes,
+  usuários/grupos ou persistência, e apenas duas regras de correlação (os logs reforçam a evidência). No cenário
   `ambiguous` (conexão externa feita por serviço root) a ferramenta não gera achado, mas não porque
   analisou a conexão: ela não coleta rede. É um ponto cego, não uma conclusão.
+- **Logs não mostram quem editou.** Eles dizem quando o serviço rodou, mas não quem alterou o arquivo;
+  isso exigiria auditoria de escrita (`auditd`), que não coletamos.
 - **UID real, não efetivo.** Lemos o primeiro campo `Uid:` de `/proc/<pid>/status`, então binários
   setuid (que mudam só o UID efetivo) não são detectados pela C2.
 - **Só o arquivo, não o diretório.** A C1 verifica a permissão do script, mas não a do diretório que

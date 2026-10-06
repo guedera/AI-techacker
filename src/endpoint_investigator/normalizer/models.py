@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel
@@ -32,4 +33,12 @@ class Service(BaseModel):
     active: str
     user: str
     exec_start: str
+    source: Literal["real", "dataset"]
+
+
+class LogEvent(BaseModel):
+    timestamp: datetime
+    program: str
+    pid: int | None = None
+    message: str
     source: Literal["real", "dataset"]

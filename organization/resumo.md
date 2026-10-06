@@ -93,6 +93,10 @@ Cada um existe em **2 versões**, que entregam o mesmo tipo de dado:
 | Processos | lê `/proc/<pid>/` (`status`, `stat`, `cmdline`, `exe`) | lê `processes.csv` |
 | Permissões | usa `os.stat()` em arquivos específicos | lê `permissions.csv` |
 | Serviços | roda `systemctl list-units`, `show` e `cat` | lê `services.txt` |
+| Logs | roda `journalctl` (eventos do boot atual) | lê `journal.log` |
+
+Os **logs** não são uma das 3 dimensões obrigatórias, mas coletamos também (o `journal.log` do gerador ou o
+`journalctl`): eles servem pra **melhorar a evidência**. Se o `journalctl` falhar, a coleta segue sem eles.
 
 **Por que duas versões?** Porque desenvolvemos no Mac (que não tem `/proc` nem `systemd`) e porque
 precisamos de testes **repetíveis**. Assim a **mesma lógica de análise** roda no dataset ou na VM Kali,
@@ -106,7 +110,7 @@ contexto".
 ### 4.2 Normalização: "colocar tudo no mesmo formato e ligar os pontos"
 
 Os dados chegam em formatos diferentes (arquivo CSV, saída de comando, pasta `/proc`). Convertemos
-tudo pra **três formatos comuns** (`Process`, `FileResource`, `Service`, no arquivo `models.py`) e
+tudo pra **quatro formatos comuns** (`Process`, `FileResource`, `Service` e `LogEvent`, no arquivo `models.py`) e
 juntamos numa classe chamada **`Snapshot`**, que sabe responder:
 
 - Quem é o **pai** deste processo? Quem são os **filhos**?
@@ -114,6 +118,7 @@ juntamos numa classe chamada **`Snapshot`**, que sabe responder:
   processo)
 - Quais **arquivos** este serviço usa?
 - Qual a **permissão** deste arquivo?
+- Quais **logs** falam deste serviço ou deste processo?
 
 **O truque do interpretador** (vale saber explicar): se o serviço roda `bash /opt/backup/backup.sh`, o
 programa é o `bash`, mas quem realmente manda é o **script**. Então, quando o executável é um
@@ -196,6 +201,8 @@ O que a ferramenta faz, passo a passo:
    pode alterar**.
 6. Gera o achado **ALTA / confiança alta**, com os 4 campos preenchidos e a frase-chave na evidência
    ausente: *não temos prova de que alguém alterou*. **Isso não prova exploração.**
+   Na evidência ela ainda junta a **linha do tempo** vinda dos logs: o arquivo foi alterado em 13/09 e o
+   serviço tem registros em 14/09, ou seja, ele teve atividade **depois** da alteração.
 
 Agora a variação que prova que a ferramenta "pensa": se o mesmo script tivesse modo `0700`, o passo 5
 daria "só o dono escreve" e **não haveria achado**, mesmo com o serviço rodando como root. É isso que o
@@ -210,7 +217,7 @@ enunciado chama de "serviço root não é automaticamente vulnerável".
 
 ## 7. Como a gente testou
 
-- **32 testes automatizados** (`uv run pytest -q`). Eles rodam até no Mac porque, nos coletores reais,
+- **47 testes automatizados** (`uv run pytest -q`). Eles rodam até no Mac porque, nos coletores reais,
   o `/proc` e o `systemctl` podem ser **trocados por versões falsas** nos testes. Assim testamos a
   lógica sem precisar de um Linux de verdade.
 - **Os 6 cenários do gerador do professor:** `normal`, `permission`, `privileged_service`,
@@ -238,8 +245,10 @@ sistema real mostrou essas falhas.*
 
 Saber dizer isso bem **vale nota**: o enunciado quer que a gente reconheça os limites.
 
-- **Só olha processos, permissões e serviços.** Não coleta **rede**, **logs**, hashes, usuários/grupos
-  nem persistência. Só implementamos **2 das 4** correlações sugeridas.
+- **Olha processos, permissões, serviços e logs.** Não coleta **rede**, hashes, usuários/grupos nem
+  persistência. Só implementamos **2 regras** de correlação; os logs entram como reforço da evidência.
+- **Os logs não mostram quem editou o arquivo.** Eles dizem **quando** o serviço rodou. Edição de arquivo
+  só apareceria com auditoria de escrita (`auditd`), que a gente não coleta.
 - **Cenário `ambiguous` (conexão externa de um serviço root):** a ferramenta não gera achado, mas **não
   porque analisou e achou normal**. É porque ela **não coleta rede**. É um **ponto cego**, não uma conclusão.
 - **UID real, não efetivo:** programas "setuid" (como o `passwd`) viram root só por dentro, e a
@@ -286,16 +295,16 @@ algo que **era**.
    explorado, mas não sabemos quem está no grupo, então a confiança é baixa.
 5. **A ferramenta usa IA?** Não. Coleta, regras e textos são determinísticos. Mesma entrada, mesma saída.
 6. **Quais correlações implementaram?** Duas: Processo+Serviço+Permissão e Processo+PPID+Usuário. Não
-   fizemos Serviço+Arquivo+Usuário nem a que usa logs.
+   fizemos Serviço+Arquivo+Usuário. Os logs entram como reforço da evidência dentro dessas duas.
 7. **Como funciona a Regra 2?** Procura processo root cujo pai é usuário comum. Se tem `sudo`/`su`/`pkexec`
    no processo ou no pai, é baixa/alta (esperado). Sem isso, é alta/baixa (incomum, motivo desconhecido).
 8. **Por que o cenário `ambiguous` não gerou achado?** Ele é sobre conexão de rede e a gente não coleta
    rede. É um ponto cego declarado, não uma conclusão de que está tudo bem.
-9. **Como testaram sem Linux?** O `/proc` e o `systemctl` são substituíveis nos coletores reais, então
+9. **Como testaram sem Linux?** O `/proc`, o `systemctl` e o `journalctl` são substituíveis nos coletores reais, então
    testamos o parsing com dados fabricados. Depois validamos na VM Kali de verdade.
 10. **O que vocês descobriram na VM?** Três coisas: um serviço derrubando a coleta, o fork do `sudo`
     (pai e filho) e o caminho `/usr/bin/bash` diferente de `/bin/bash`.
-11. **Quais as limitações?** Sem rede/logs, UID real em vez de efetivo (setuid passa), só o arquivo e não a
+11. **Quais as limitações?** Sem rede e sem auditoria de edição de arquivo, UID real em vez de efetivo (setuid passa), só o arquivo e não a
     pasta, ligação serviço-processo por texto idêntico, listas fixas.
 12. **O que é falso positivo? Dê um exemplo do projeto.** Marcar algo que não era problema. Ex.: um
     `doas` legítimo aparecendo como "subida de privilégio sem ferramenta conhecida".
@@ -303,6 +312,10 @@ algo que **era**.
 14. **Por que tem coletor "real" e "dataset"?** Pra rodar a mesma análise na VM e em testes repetíveis.
 15. **Dá pra rodar em outro Linux?** Em qualquer Linux com systemd. Com `sudo` pra ver os processos de
     todos os usuários. Só validamos na Kali.
+16. **Vocês usam logs? Como?** Sim, como reforço da evidência. Na Regra 1, comparamos a data de modificação
+    do arquivo com os logs do serviço (linha do tempo: o serviço rodou depois da alteração?). Na Regra 2,
+    anexamos os logs do processo e do pai (ex.: o registro do `sudo`). Os logs dizem **quando** algo rodou,
+    não **quem editou** o arquivo: isso exigiria `auditd`.
 
 ## 11. Mapa do código (pra abrir e mostrar)
 
@@ -312,14 +325,15 @@ algo que **era**.
 | `collectors/process_real.py`, `process_dataset.py` | Coletam processos (do `/proc` ou do CSV) |
 | `collectors/permission_real.py`, `permission_dataset.py` | Coletam permissões (de `os.stat` ou do CSV) |
 | `collectors/service_real.py`, `service_dataset.py` | Coletam serviços (do `systemctl` ou do `services.txt`) |
+| `collectors/log_real.py`, `log_dataset.py`, `log_line.py` | Coletam logs (do `journalctl` ou do `journal.log`) e separam cada linha em programa, PID e mensagem |
 | `collectors/base.py` | As "regras do jogo" que toda versão (real e dataset) segue |
-| `normalizer/models.py` | Os formatos comuns: `Process`, `FileResource`, `Service` |
+| `normalizer/models.py` | Os formatos comuns: `Process`, `FileResource`, `Service`, `LogEvent` |
 | `normalizer/snapshot.py` | A classe `Snapshot` e o "truque do interpretador" (`resource_paths`) |
 | `correlator/rules.py` | **As 2 regras.** É o coração do projeto |
 | `evidence/models.py` | O `Finding`: os 4 campos + severidade + confiança |
 | `reporter/console.py` | Desenha os painéis coloridos no terminal |
 | `generate_dataset.py` | Gerador de dados de teste (do professor, com 2 correções nossas) |
-| `tests/` | Os 32 testes |
+| `tests/` | Os 47 testes |
 
 **Se você só puder abrir 2 arquivos, abra `correlator/rules.py` e `normalizer/snapshot.py`.** Eles
 contêm o raciocínio todo.

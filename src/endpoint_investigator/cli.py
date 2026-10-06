@@ -1,6 +1,8 @@
 import argparse
 from pathlib import Path
 
+from endpoint_investigator.collectors.log_dataset import DatasetLogCollector
+from endpoint_investigator.collectors.log_real import JournalCollector
 from endpoint_investigator.collectors.permission_dataset import DatasetPermissionCollector
 from endpoint_investigator.collectors.permission_real import FsPermissionCollector
 from endpoint_investigator.collectors.process_dataset import DatasetProcessCollector
@@ -13,10 +15,12 @@ from endpoint_investigator.reporter.console import render_findings
 
 
 def load_snapshot_from_dataset(dataset_dir: Path) -> Snapshot:
+    journal = dataset_dir / "journal.log"
     return Snapshot(
         processes=DatasetProcessCollector(dataset_dir / "processes.csv").collect(),
         permissions=DatasetPermissionCollector(dataset_dir / "permissions.csv").collect(),
         services=DatasetServiceCollector(dataset_dir / "services.txt").collect(),
+        logs=DatasetLogCollector(journal).collect() if journal.exists() else [],
     )
 
 
@@ -27,7 +31,12 @@ def load_snapshot_from_real_system() -> Snapshot:
     paths = {path for process in processes for path in resource_paths(process)}
     permissions = FsPermissionCollector().collect(paths=paths) if paths else []
 
-    return Snapshot(processes=processes, permissions=permissions, services=services)
+    return Snapshot(
+        processes=processes,
+        permissions=permissions,
+        services=services,
+        logs=JournalCollector().collect(),
+    )
 
 
 def main() -> None:

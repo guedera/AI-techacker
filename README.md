@@ -21,9 +21,9 @@ COLETA → NORMALIZAÇÃO → CORRELAÇÃO → EVIDÊNCIAS/HIPÓTESES → RESULT
 
 | Etapa | Pasta | O que faz |
 |---|---|---|
-| Coleta | `collectors/` | Lê processos, permissões e serviços, do sistema Linux real ou de um dataset sintético, atrás da mesma interface |
-| Normalização | `normalizer/` | Modelos comuns (`Process`, `FileResource`, `Service`) e o `Snapshot`, que liga processo ↔ pai, serviço ↔ processo ↔ arquivo e arquivo ↔ permissão |
-| Correlação | `correlator/` | Regras que cruzam as três fontes e geram achados |
+| Coleta | `collectors/` | Lê processos, permissões, serviços e logs, do sistema Linux real ou de um dataset sintético, atrás da mesma interface |
+| Normalização | `normalizer/` | Modelos comuns (`Process`, `FileResource`, `Service`, `LogEvent`) e o `Snapshot`, que liga processo ↔ pai, serviço ↔ processo ↔ arquivo, arquivo ↔ permissão e serviço/processo ↔ logs |
+| Correlação | `correlator/` | Regras que cruzam as fontes (inclusive os logs, para montar uma linha do tempo) e geram achados |
 | Evidências/hipóteses | `evidence/` | Modelo `Finding`: evidência, interpretação, hipótese, evidência ausente, severidade e confiança |
 | Resultado | `reporter/` | Relatório no terminal (`rich`), um painel por achado, colorido por severidade |
 
@@ -54,7 +54,8 @@ uv run python -m endpoint_investigator.cli training/meu-dataset
 ```
 
 A pasta precisa ter `processes.csv`, `permissions.csv` e `services.txt` (formato do
-`generate_dataset.py`).
+`generate_dataset.py`). O `journal.log`, se existir, também é lido; sem ele a análise roda igual,
+só sem os logs.
 
 ### Gerando datasets de teste
 
@@ -89,7 +90,7 @@ o `sudo` usa um `PATH` próprio e não encontra o `uv` instalado na home do usu�
 uv run pytest -q
 ```
 
-São 32 testes e eles rodam sem Linux: o `/proc` e o `systemctl` são injetáveis nos collectors reais,
+São 47 testes e eles rodam sem Linux: o `/proc`, o `systemctl` e o `journalctl` são injetáveis nos collectors reais,
 então o parsing é testado com dados fabricados.
 
 ## Fontes de informação
@@ -99,11 +100,12 @@ então o parsing é testado com dados fabricados.
 | Processos | `/proc/<pid>/status`, `stat`, `cmdline` e `exe` (PID, PPID, UID/GID, usuário, estado, comando, executável) | `processes.csv` |
 | Permissões | `os.stat()` apenas nos caminhos relevantes (dono, grupo, modo, mtime) | `permissions.csv` |
 | Serviços | `systemctl list-units`, `show` e `cat` (nome, estado, usuário, `ExecStart`) | `services.txt` |
+| Logs | `journalctl -b -o short-iso` (últimos 20000 eventos do boot atual: horário, programa, PID, mensagem) | `journal.log` |
 
 As permissões nunca vêm de uma varredura do filesystem: só são lidas para os arquivos que aparecem
 nos processos e serviços coletados (o executável e, quando o executável é um interpretador como
 `bash`, `sh` ou `python`, o script passado como argumento). O collector real recusa ser chamado sem
-a lista de caminhos.
+a lista de caminhos. Os logs só reforçam a evidência: se não houver `journalctl`, a coleta segue sem eles.
 
 ## Correlações implementadas
 
@@ -118,6 +120,10 @@ processo correspondente, os arquivos que ele usa e a permissão de cada um.
 | Gravável só pelo grupo dono | `medium` | `low` (não sabemos quem está no grupo) |
 | Restrito ao dono | sem achado | — |
 
+**Linha do tempo com logs:** a evidência cruza a data de modificação do arquivo (`mtime`) com os logs do
+serviço (achados pelo nome da unit, pelo programa ou pelo PID) e diz se o serviço teve atividade depois
+da última alteração. Isso muda o texto da evidência e da evidência ausente, não a gravidade.
+
 ### 2. Processo + PPID + Usuário → contexto de execução
 
 Regra `processo_root_com_pai_nao_privilegiado`. Aponta processos root cujo pai roda como usuário comum.
@@ -129,6 +135,9 @@ Regra `processo_root_com_pai_nao_privilegiado`. Aponta processos root cujo pai r
 
 A queda normal de privilégio (por exemplo `sshd` root abrindo o shell de um usuário) não gera achado.
 
+**Logs na evidência:** o achado anexa até 3 logs do processo e do pai (por exemplo o registro do `sudo`
+no journal), o que ajuda a confirmar a elevação sem prová-la.
+
 ## Formato dos achados
 
 Todo achado traz quatro campos separados, mais severidade e confiança (que são independentes:
@@ -138,14 +147,18 @@ ela é). Saída resumida do cenário `correlation`:
 ```
 HIGH servico_privilegiado_arquivo_gravavel (confianca: high)
   evidencia: Servico backup-agent.service roda como root e executa /opt/backup/backup.sh,
-             que tem permissao 0777 (dono root:root).
+             que tem permissao 0777 (dono root:root). Logs do servico: 4 registro(s), o
+             ultimo em 14/09/2026 09:02:05 (backup-agent: backup completed with status=OK).
+             O arquivo foi modificado pela ultima vez em 13/09/2026 08:59:00, antes desse
+             ultimo registro: o servico teve atividade depois da alteracao.
   interpretacao: O arquivo usado pelo servico privilegiado pode ser alterado por qualquer
                  usuario do sistema.
   hipotese: Se algum desses usuarios alterar o arquivo, o conteudo passa a rodar com
             privilegio de root na proxima vez que o servico executar.
-  evidencia ausente: Nao ha confirmacao de que o arquivo foi de fato alterado por um usuario
-                     sem privilegio, nem de execucao logo depois de uma alteracao suspeita.
-                     Precisaria de auditoria de escrita (ex: auditd) ou historico de hash.
+  evidencia ausente: Os logs mostram atividade do servico depois da ultima alteracao, mas
+                     nao mostram quem alterou o arquivo nem o que mudou. Precisaria de
+                     auditoria de escrita (ex: auditd), historico de hash, ou a lista de
+                     membros do grupo root pra saber quem realmente tem acesso.
 ```
 
 Os textos são gerados por templates determinísticos nas regras (`correlator/rules.py`): a evidência
@@ -165,13 +178,16 @@ src/endpoint_investigator/
     permission_dataset.py # permissions.csv
     service_real.py       # systemctl
     service_dataset.py    # services.txt
+    log_real.py           # journalctl
+    log_dataset.py        # journal.log
+    log_line.py           # parsing de linha de log (usado pelos dois)
   normalizer/
-    models.py             # Process, FileResource, Service
+    models.py             # Process, FileResource, Service, LogEvent
     snapshot.py           # relações entre as entidades
   correlator/rules.py     # regras de correlação
   evidence/models.py      # Finding
   reporter/console.py     # saída no terminal
-tests/                    # 32 testes automatizados
+tests/                    # 47 testes automatizados
 generate_dataset.py       # gerador de datasets (fornecido, com duas correções)
 training/                 # datasets gerados localmente (ignorado pelo git)
 ```
@@ -180,8 +196,11 @@ training/                 # datasets gerados localmente (ignorado pelo git)
 
 Resumo; a lista completa está no [relatorio_final.md](relatorio_final.md).
 
-- Cobre só processos, permissões e serviços. Sem conexões de rede, logs, hashes, usuários/grupos ou
-  persistência, e só 2 das 4 correlações sugeridas no enunciado.
+- Cobre processos, permissões, serviços e logs. Sem conexões de rede, hashes, usuários/grupos ou
+  persistência, e só 2 regras de correlação (o cruzamento com logs entra como reforço de evidência
+  dentro delas, não como regra própria).
+- Os logs mostram quando o serviço rodou, **não quem editou o arquivo**: eventos de edição só existiriam
+  com auditoria de escrita (`auditd`), que não coletamos. O `journal.log` do gerador também não os tem.
 - No cenário `ambiguous` (conexão externa feita por serviço root) a ferramenta não gera achado, mas
   **porque não coleta rede**, não porque analisou a conexão: é um ponto cego, não uma conclusão.
 - Usa o UID real do processo; binários setuid (que mudam só o UID efetivo) não são detectados.

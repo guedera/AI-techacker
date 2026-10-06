@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from endpoint_investigator.normalizer.models import FileResource, Process, Service
+from endpoint_investigator.normalizer.models import FileResource, LogEvent, Process, Service
 
 # quando o executavel de um processo e um desses, o arquivo que interessa de
 # verdade pra analise de permissao esta nos argumentos, nao no executavel
@@ -36,6 +36,7 @@ class Snapshot:
     processes: list[Process]
     permissions: list[FileResource]
     services: list[Service]
+    logs: list[LogEvent] = field(default_factory=list)
     _process_by_pid: dict[int, Process] = field(init=False, repr=False)
     _permission_by_path: dict[str, FileResource] = field(init=False, repr=False)
 
@@ -67,3 +68,18 @@ class Snapshot:
     def files_of_service(self, service: Service) -> list[str]:
         process = self.process_for_service(service)
         return self.paths_of_interest(process) if process else []
+
+    def events_of_pid(self, pid: int) -> list[LogEvent]:
+        return sorted((e for e in self.logs if e.pid == pid), key=lambda e: e.timestamp)
+
+    def events_of_service(self, service: Service) -> list[LogEvent]:
+        """Logs que citam o servico: pelo nome do programa, pelo nome da unit ou pelo PID dele."""
+        unit = service.name.removesuffix(".service")
+        process = self.process_for_service(service)
+        pid = process.pid if process else None
+        related = (
+            e
+            for e in self.logs
+            if e.program == unit or service.name in e.message or (pid is not None and e.pid == pid)
+        )
+        return sorted(related, key=lambda e: e.timestamp)

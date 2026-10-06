@@ -29,7 +29,7 @@ Instalar as dependências:
 uv sync
 ```
 
-Rodar os testes (esperado: `32 passed`):
+Rodar os testes (esperado: `47 passed`):
 
 ```bash
 uv run pytest -q
@@ -101,7 +101,10 @@ sudo $(which uv) run python -m endpoint_investigator.cli
 ```
 
 Esperado: um painel `HIGH` para `demo-backup.service` (permissão `0777`) e um `LOW` para a própria
-sessão `sudo`. **Tire um print da tela**: é o plano B se algo falhar na hora.
+sessão `sudo`. Na evidência do `HIGH` deve aparecer a linha do tempo ("Logs do servico: ... O arquivo
+foi modificado ...") e, na do `LOW`, o log do `sudo` ("Logs desses processos: ... sudo[...]"). Se
+aparecer "Nao foram encontrados logs" ou "Nenhum log encontrado", o `journalctl` falhou ou não achou
+o serviço: mande a saída. **Tire um print da tela**: é o plano B se algo falhar na hora.
 
 Se o `HIGH` não aparecer, não improvise: mande a saída completa pra investigar antes da aula.
 
@@ -124,7 +127,7 @@ coleta → normalização → correlação → evidências → resultado.
 uv run pytest -q
 ```
 
-Fala: "32 testes automatizados; rodam sem precisar de um Linux de verdade".
+Fala: "47 testes automatizados; rodam sem precisar de um Linux de verdade".
 
 ### Passo 3: cenário normal
 
@@ -156,7 +159,9 @@ uv run python -m endpoint_investigator.cli training/demo-3-correlacao
 
 Saída: painel `HIGH` / confiança `high` (`servico_privilegiado_arquivo_gravavel`).
 Leia os 4 campos em voz alta: evidência, interpretação, hipótese e evidência ausente.
-Frase-chave: **"isso não prova exploração"**; a evidência ausente diz o que falta para confirmar.
+A evidência traz a **linha do tempo** vinda do `journal.log`: o arquivo foi modificado antes de o serviço
+rodar. Frase-chave: **"isso não prova exploração"**; os logs mostram quando o serviço rodou, mas a
+evidência ausente diz que falta saber **quem** alterou o arquivo (precisaria de `auditd`).
 
 ### Passo 6: cenário ambíguo
 
@@ -182,15 +187,16 @@ Agora a ferramenta, sem dataset, lendo o `/proc` e o `systemctl` de verdade:
 sudo $(which uv) run python -m endpoint_investigator.cli
 ```
 
-Saída: o `HIGH` do `demo-backup.service` e o `LOW` do `sudo`.
+Saída: o `HIGH` do `demo-backup.service` e o `LOW` do `sudo`, cada um com logs reais do journal na evidência.
 Fala: o `LOW` é a própria sessão da ferramenta, classificada como elevação por `sudo`. Aproveitar
 para contar o que só apareceu no sistema real: o `sudo` faz fork (o pai fica com `sudo`, o filho já
 roda como root) e o `auditd.service`, cujo erro derrubava a coleta inteira.
 
 ### Passo 8: fecho (1 min, sem comando)
 
-Limitações: sem rede e logs, UID real em vez de efetivo (setuid não é detectado), só o arquivo e não
-o diretório, só 2 das 4 correlações. Próximo passo possível: coleta de rede e de logs.
+Limitações: sem rede, UID real em vez de efetivo (setuid não é detectado), só o arquivo e não o
+diretório, e os logs mostram quando o serviço rodou mas não quem editou o arquivo (faltaria
+`auditd`). Próximo passo possível: coleta de rede e de auditoria de escrita.
 
 ## 3. Se algo der errado
 

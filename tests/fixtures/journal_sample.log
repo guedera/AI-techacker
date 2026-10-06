@@ -1,0 +1,5 @@
+Sep 14 09:00:00 srv-app-01 systemd[1]: Started ssh.service - OpenBSD Secure Shell server.
+Sep 14 09:02:00 srv-app-01 systemd[1]: Starting backup-agent.service - Internal Backup Agent...
+Sep 14 09:02:03 srv-app-01 backup-agent[2417]: backup job started
+Sep 14 09:02:05 srv-app-01 backup-agent[2417]: backup completed with status=OK
+linha quebrada sem o formato de log

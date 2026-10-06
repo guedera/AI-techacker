@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 
-from endpoint_investigator.normalizer.models import FileResource, Process, Service
+from endpoint_investigator.normalizer.models import FileResource, LogEvent, Process, Service
 
 
 class ProcessCollector(ABC):
@@ -29,4 +29,12 @@ class ServiceCollector(ABC):
 
     @abstractmethod
     def collect(self) -> list[Service]:
+        ...
+
+
+class LogCollector(ABC):
+    """Interface comum pra coletar eventos de log, seja do journal real ou de um dataset."""
+
+    @abstractmethod
+    def collect(self) -> list[LogEvent]:
         ...

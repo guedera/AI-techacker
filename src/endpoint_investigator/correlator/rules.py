@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from endpoint_investigator.evidence.models import Finding
 from endpoint_investigator.normalizer.models import FileResource, Service
 from endpoint_investigator.normalizer.snapshot import Snapshot
@@ -19,16 +21,84 @@ def _is_group_writable(mode: str) -> bool:
     return _digit(mode, -2) & WRITE_BIT != 0
 
 
+def _parse_time(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def _fmt(when: datetime) -> str:
+    return when.strftime("%d/%m/%Y %H:%M:%S")
+
+
+def _short(text: str, limit: int = 100) -> str:
+    return text if len(text) <= limit else text[: limit - 3] + "..."
+
+
+def _timeline(snapshot: Snapshot, service: Service, perm: FileResource) -> tuple[str, bool]:
+    """Cruza o mtime do arquivo com os logs do servico.
+
+    Devolve a frase pra evidencia e se os logs mostram o servico ativo depois da
+    ultima alteracao do arquivo (o que sugere que ele ja rodou a versao atual).
+    """
+    events = snapshot.events_of_service(service)
+    if not events:
+        return "Nao foram encontrados logs desse servico.", False
+
+    last = events[-1]
+    text = (
+        f"Logs do servico: {len(events)} registro(s), o ultimo em {_fmt(last.timestamp)} "
+        f"({last.program}: {_short(last.message)})."
+    )
+    modified = _parse_time(perm.mtime)
+    if modified is None:
+        return text, False
+    if modified <= last.timestamp:
+        return (
+            f"{text} O arquivo foi modificado pela ultima vez em {_fmt(modified)}, antes desse "
+            "ultimo registro: o servico teve atividade depois da alteracao.",
+            True,
+        )
+    return (
+        f"{text} O arquivo foi modificado em {_fmt(modified)}, depois do ultimo registro do "
+        "servico: a alteracao ainda nao aparece como executada.",
+        False,
+    )
+
+
 def _writable_finding(
-    service: Service, path: str, perm: FileResource, *, scope: str, severity: str, confidence: str
+    snapshot: Snapshot,
+    service: Service,
+    path: str,
+    perm: FileResource,
+    *,
+    scope: str,
+    severity: str,
+    confidence: str,
 ) -> Finding:
+    timeline, active_after_change = _timeline(snapshot, service, perm)
+    if active_after_change:
+        gap = (
+            "Os logs mostram atividade do servico depois da ultima alteracao, mas nao mostram "
+            "quem alterou o arquivo nem o que mudou. "
+        )
+    else:
+        gap = (
+            "Nao ha confirmacao de que o arquivo foi de fato alterado por um usuario sem "
+            "privilegio, nem de execucao logo depois de uma alteracao suspeita. "
+        )
+
     return Finding(
         rule="servico_privilegiado_arquivo_gravavel",
         severity=severity,
         confidence=confidence,
         evidence=(
             f"Servico {service.name} roda como root e executa {path}, "
-            f"que tem permissao {perm.mode} (dono {perm.owner}:{perm.group})."
+            f"que tem permissao {perm.mode} (dono {perm.owner}:{perm.group}). {timeline}"
         ),
         interpretation=f"O arquivo usado pelo servico privilegiado pode ser alterado por {scope}.",
         hypothesis=(
@@ -36,10 +106,8 @@ def _writable_finding(
             "privilegio de root na proxima vez que o servico executar."
         ),
         missing_evidence=(
-            "Nao ha confirmacao de que o arquivo foi de fato alterado por um usuario sem "
-            "privilegio, nem de execucao logo depois de uma alteracao suspeita. Precisaria de "
-            "auditoria de escrita (ex: auditd), historico de hash, ou a lista de membros do "
-            f"grupo {perm.group} pra saber quem realmente tem acesso."
+            f"{gap}Precisaria de auditoria de escrita (ex: auditd), historico de hash, ou a "
+            f"lista de membros do grupo {perm.group} pra saber quem realmente tem acesso."
         ),
     )
 
@@ -62,7 +130,7 @@ def find_privileged_service_writable_file(snapshot: Snapshot) -> list[Finding]:
             if _is_world_writable(perm.mode):
                 findings.append(
                     _writable_finding(
-                        service, path, perm,
+                        snapshot, service, path, perm,
                         scope="qualquer usuario do sistema",
                         severity="high",
                         confidence="high",
@@ -71,7 +139,7 @@ def find_privileged_service_writable_file(snapshot: Snapshot) -> list[Finding]:
             elif _is_group_writable(perm.mode):
                 findings.append(
                     _writable_finding(
-                        service, path, perm,
+                        snapshot, service, path, perm,
                         scope=f"usuarios do grupo {perm.group}",
                         severity="medium",
                         confidence="low",
@@ -116,6 +184,27 @@ def find_privilege_escalation_in_tree(snapshot: Snapshot) -> list[Finding]:
                 "conhecido (sudo/su/pkexec). Isso e incomum e merece mais atencao."
             )
 
+        events = sorted(
+            snapshot.events_of_pid(parent.pid) + snapshot.events_of_pid(process.pid),
+            key=lambda e: e.timestamp,
+        )
+        if events:
+            lines = " | ".join(
+                f"{_fmt(e.timestamp)} {e.program}[{e.pid}]: {_short(e.message)}" for e in events[:3]
+            )
+            logs_evidence = f" Logs desses processos: {lines}."
+            missing = (
+                "Falta confirmar se o usuario tinha autorizacao pra essa elevacao (ex: entrada "
+                "no sudoers). Os logs citados na evidencia registram o evento, mas nao provam "
+                "que ele foi autorizado."
+            )
+        else:
+            logs_evidence = " Nenhum log encontrado pra esses processos."
+            missing = (
+                "Falta confirmar se o usuario tinha autorizacao pra essa elevacao (ex: "
+                "entrada no sudoers) e o log de autenticacao correspondente."
+            )
+
         findings.append(
             Finding(
                 rule="processo_root_com_pai_nao_privilegiado",
@@ -123,7 +212,7 @@ def find_privilege_escalation_in_tree(snapshot: Snapshot) -> list[Finding]:
                 confidence=confidence,
                 evidence=(
                     f"Processo {process.pid} ({process.cmd}) roda como root, mas o pai "
-                    f"{parent.pid} ({parent.cmd}) roda como {parent.user}."
+                    f"{parent.pid} ({parent.cmd}) roda como {parent.user}.{logs_evidence}"
                 ),
                 interpretation=interpretation,
                 hypothesis=(
@@ -131,10 +220,7 @@ def find_privilege_escalation_in_tree(snapshot: Snapshot) -> list[Finding]:
                     "configurado no sistema, ou representar uma escalada indevida caso o "
                     "usuario nao tivesse permissao pra isso."
                 ),
-                missing_evidence=(
-                    "Falta confirmar se o usuario tinha autorizacao pra essa elevacao (ex: "
-                    "entrada no sudoers) e o log de autenticacao correspondente."
-                ),
+                missing_evidence=missing,
             )
         )
     return findings

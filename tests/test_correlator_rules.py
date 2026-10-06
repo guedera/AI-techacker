@@ -1,9 +1,11 @@
+from datetime import datetime, timedelta, timezone
+
 from endpoint_investigator.correlator.rules import (
     find_privilege_escalation_in_tree,
     find_privileged_service_writable_file,
     run_all,
 )
-from endpoint_investigator.normalizer.models import FileResource, Process, Service
+from endpoint_investigator.normalizer.models import FileResource, LogEvent, Process, Service
 from endpoint_investigator.normalizer.snapshot import Snapshot
 
 
@@ -229,3 +231,92 @@ def test_regra_servico_root_dispara_com_exe_resolvido_pra_usr_bin():
 
     assert len(findings) == 1
     assert findings[0].severity == "high"
+
+
+BRT = timezone(timedelta(hours=-3))
+
+
+def _log(when: datetime, program: str, pid: int | None, message: str) -> LogEvent:
+    return LogEvent(timestamp=when, program=program, pid=pid, message=message, source="dataset")
+
+
+def _backup_snapshot(mtime: str, logs: list[LogEvent]) -> Snapshot:
+    process = _process(2417, 1, "root", "/bin/bash /opt/backup/backup.sh")
+    service = Service(
+        name="backup-agent.service",
+        active="running",
+        user="root",
+        exec_start="/bin/bash /opt/backup/backup.sh",
+        source="dataset",
+    )
+    permission = FileResource(
+        path="/opt/backup/backup.sh",
+        type="file",
+        owner="root",
+        group="root",
+        mode="0777",
+        mtime=mtime,
+        source="dataset",
+    )
+    return Snapshot(processes=[process], permissions=[permission], services=[service], logs=logs)
+
+
+def test_regra1_linha_do_tempo_arquivo_alterado_antes_da_atividade_do_servico():
+    logs = [_log(datetime(2026, 9, 14, 9, 2, 5, tzinfo=BRT), "backup-agent", 2417, "backup completed")]
+    snapshot = _backup_snapshot("2026-09-13T08:59:00-03:00", logs)
+
+    finding = find_privileged_service_writable_file(snapshot)[0]
+
+    assert "antes desse ultimo registro" in finding.evidence
+    assert "14/09/2026 09:02:05" in finding.evidence
+    assert "atividade do servico depois da ultima alteracao" in finding.missing_evidence
+    assert "quem alterou o arquivo" in finding.missing_evidence
+
+
+def test_regra1_linha_do_tempo_arquivo_alterado_depois_da_atividade_do_servico():
+    logs = [_log(datetime(2026, 9, 14, 9, 2, 5, tzinfo=BRT), "backup-agent", 2417, "backup completed")]
+    snapshot = _backup_snapshot("2026-09-15T10:00:00-03:00", logs)
+
+    finding = find_privileged_service_writable_file(snapshot)[0]
+
+    assert "depois do ultimo registro do servico" in finding.evidence
+    assert "Nao ha confirmacao de que o arquivo foi de fato alterado" in finding.missing_evidence
+
+
+def test_regra1_sem_logs_diz_que_nao_encontrou_e_mantem_o_achado():
+    snapshot = _backup_snapshot("2026-09-13T08:59:00-03:00", [])
+
+    findings = find_privileged_service_writable_file(snapshot)
+
+    assert len(findings) == 1
+    assert "Nao foram encontrados logs desse servico" in findings[0].evidence
+    assert findings[0].severity == "high"  # logs reforcam a evidencia, nao mudam a gravidade
+
+
+def test_regra2_anexa_logs_do_processo_pai_na_evidencia():
+    processes = [
+        _process(1212, 612, "aluno", "/bin/bash"),
+        _process(9004, 1212, "aluno", "/usr/bin/sudo /bin/id"),
+        _process(9005, 9004, "root", "/bin/id"),
+    ]
+    logs = [_log(datetime(2026, 10, 5, 16, 2, 11, tzinfo=BRT), "sudo", 9004, "aluno : COMMAND=/bin/id")]
+    snapshot = Snapshot(processes=processes, permissions=[], services=[], logs=logs)
+
+    finding = find_privilege_escalation_in_tree(snapshot)[0]
+
+    assert "Logs desses processos" in finding.evidence
+    assert "sudo[9004]: aluno : COMMAND=/bin/id" in finding.evidence
+    assert "nao provam que ele foi autorizado" in finding.missing_evidence
+
+
+def test_regra2_sem_logs_avisa_que_nao_encontrou():
+    processes = [
+        _process(1212, 612, "aluno", "/bin/bash"),
+        _process(5000, 1212, "root", "/opt/estranho/binario"),
+    ]
+    snapshot = Snapshot(processes=processes, permissions=[], services=[])
+
+    finding = find_privilege_escalation_in_tree(snapshot)[0]
+
+    assert "Nenhum log encontrado" in finding.evidence
+    assert "log de autenticacao correspondente" in finding.missing_evidence
