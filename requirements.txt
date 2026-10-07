@@ -1,0 +1,17 @@
+# Dependencias de execucao do Endpoint Investigator (precisa de Python 3.12 ou superior).
+# Instalar com: pip install -r requirements.txt
+#
+# Para rodar os testes, instale tambem o pytest: pip install pytest
+
+# diretas
+pydantic==2.13.5
+rich==15.0.0
+
+# transitivas (fixadas pra reproduzir exatamente o ambiente testado)
+annotated-types==0.8.0
+markdown-it-py==4.2.0
+mdurl==0.1.2
+pydantic-core==2.46.5
+pygments==2.21.0
+typing-extensions==4.16.0
+typing-inspection==0.4.4

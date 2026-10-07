@@ -337,12 +337,3 @@ algo que **era**.
 
 **Se você só puder abrir 2 arquivos, abra `correlator/rules.py` e `normalizer/snapshot.py`.** Eles
 contêm o raciocínio todo.
-
-## 12. Sobre o uso de IA
-
-- A **ferramenta** não usa IA. Isso é fato e pode ser afirmado com tranquilidade.
-- O **desenvolvimento** usou IA como apoio, e isso está declarado no relatório. O enunciado permite.
-- O que o professor vai avaliar na apresentação (domínio técnico) é se **vocês** entendem o que está
-  no projeto. Por isso este resumo existe: leia, rode, abra o código e consiga explicar cada parte
-  com as suas palavras. Se não souber algo, diga que não sabe e explique o que entende: é melhor do
-  que inventar.

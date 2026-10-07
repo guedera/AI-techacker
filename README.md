@@ -13,7 +13,7 @@ que é **interpretação** e do que ainda é só **hipótese** — sem tratar ne
 - Guilherme Galvão Guedes — guilhermegg5@al.insper.edu.br
 - Luiz Miguel Moraes Berredo — luizmmb1@al.insper.edu.br
 
-## Como funciona
+## Arquitetura (como funciona)
 
 ```
 COLETA → NORMALIZAÇÃO → CORRELAÇÃO → EVIDÊNCIAS/HIPÓTESES → RESULTADO
@@ -29,23 +29,47 @@ COLETA → NORMALIZAÇÃO → CORRELAÇÃO → EVIDÊNCIAS/HIPÓTESES → RESULT
 
 Mais detalhes de arquitetura e decisões em [ARCHITECTURE.md](organization/ARCHITECTURE.md).
 
-## Requisitos
+## Dependências e requisitos
 
-- Python 3.12 ou superior e [uv](https://docs.astral.sh/uv/).
-- Dependências do projeto (instaladas pelo `uv sync`): `pydantic`, `rich`; de desenvolvimento: `pytest`.
+- **Python 3.12 ou superior** (`python3 --version` mostra qual você tem).
+- **Dependências de execução**, listadas em `requirements.txt`: `pydantic` (modelos de dados) e `rich`
+  (relatório colorido no terminal), mais as dependências delas. Para rodar os testes, `pytest`.
+- O gerador de datasets (`generate_dataset.py`) usa só a biblioteca padrão do Python.
+- O [uv](https://docs.astral.sh/uv/) é **opcional**: o projeto traz `pyproject.toml` e `uv.lock` para quem
+  usa uv, mas tudo roda só com `pip` (Opção B abaixo).
 - **Modo sistema real:** Linux com systemd (validado numa VM Kali). Para enxergar processos de
   outros usuários é preciso rodar com `sudo`.
 - **Modo dataset:** roda em qualquer sistema (desenvolvido e testado em macOS e Linux).
 
 ## Instalação
 
-Dentro da pasta do projeto:
+Dentro da pasta do projeto, escolha uma das opções.
+
+**Opção A: com uv**
 
 ```bash
 uv sync
 ```
 
+**Opção B: sem uv** (só Python 3.12+ e pip)
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
 ## Execução
+
+Os exemplos abaixo usam `uv`. Quem instalou pela Opção B (com o ambiente virtual ativado) usa os
+comandos da coluna da direita. O `PYTHONPATH=src` é necessário porque o código fica na pasta `src/`.
+
+| O que fazer | Com `uv` | Sem `uv` |
+|---|---|---|
+| Analisar um dataset | `uv run python -m endpoint_investigator.cli <pasta>` | `PYTHONPATH=src python -m endpoint_investigator.cli <pasta>` |
+| Gerar um dataset | `uv run python generate_dataset.py ...` | `python generate_dataset.py ...` |
+| Rodar os testes | `uv run pytest -q` | `pip install pytest` e depois `python -m pytest -q` |
+| Analisar o sistema real (Linux) | `sudo $(which uv) run python -m endpoint_investigator.cli` | `sudo env PYTHONPATH=src .venv/bin/python -m endpoint_investigator.cli` |
 
 ### Sobre um dataset
 
@@ -192,6 +216,13 @@ generate_dataset.py       # gerador de datasets (fornecido, com duas correções
 training/                 # datasets gerados localmente (ignorado pelo git)
 ```
 
+## Uso de IA no aplicativo
+
+O aplicativo **não tem IA integrada**. Nenhuma etapa usa modelo de linguagem: a coleta, a normalização,
+a correlação e a geração dos textos dos achados são determinísticas (regras em Python e modelos de frase
+fixos em `correlator/rules.py`). Não há chave de API nem chamada de rede, as únicas dependências de
+execução são `pydantic` e `rich`, e a mesma entrada gera sempre a mesma saída.
+
 ## Limitações
 
 Resumo; a lista completa está no [relatorio_final.md](relatorio_final.md).
@@ -215,15 +246,12 @@ Resumo; a lista completa está no [relatorio_final.md](relatorio_final.md).
 
 ## Sobre o `generate_dataset.py`
 
-O enunciado permite adaptar o script fornecido. Corrigimos dois bugs nele (detalhes em
-[TESTING.md](organization/TESTING.md)):
+O enunciado permite adaptar o script fornecido. Corrigimos dois bugs nele:
 
 1. O cenário `random_noise` quebrava sempre que era sorteado (`intermediate` e `challenge`).
 2. O cenário `scenario_permission` aparecia rotulado como `normal` no `metadata.json`.
 
 ## Mais documentação
 
-- [relatorio_final.md](relatorio_final.md): documento técnico (problema, estratégia, arquitetura, correlações, decisões, uso de IA, limitações).
+- [relatorio_final.md](relatorio_final.md): documento técnico (problema, estratégia, arquitetura, correlações, decisões técnicas, validação, limitações).
 - [ARCHITECTURE.md](organization/ARCHITECTURE.md): camadas, escopo e decisões de arquitetura.
-- [TESTING.md](organization/TESTING.md): validação contra os cenários do gerador e na VM Kali.
-- [sprints.md](organization/sprints.md): plano de execução e o que foi feito.
